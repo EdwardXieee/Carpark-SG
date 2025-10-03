@@ -1,0 +1,127 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body, html {
+  height: 100%;
+  width: 100%;
+  font-family: Arial, sans-serif;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+/* 修复Leaflet地图样式 */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+.leaflet-marker-icon {
+  filter: hue-rotate(120deg);
+}
+
+/* 导航栏样式 */
+.app-header {
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+.app-title {
+  color: #333;
+  font-weight: bold !important;
+}
+
+.sign-in-button {
+  color: #333;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.bookings-button {
+  background-color: #4CAF50 !important;
+  color: white !important;
+  padding: 4px 10px !important;
+  border-radius: 4px !important;
+  cursor: pointer;
+}
+
+/* 搜索框样式 */
+.search-container {
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  overflow: visible;
+}
+
+.search-input {
+  padding: 10px 15px;
+}
+
+.search-location {
+  display: flex;
+  align-items: center;
+  padding: 8px 15px;
+  background-color: rgba(0,0,0,0.05);
+}
+
+/* 停车场列表样式 */
+.parking-list {
+  background-color: white;
+  border-left: 1px solid #eee;
+  overflow-y: auto;
+}
+
+.sort-container {
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.parking-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.parking-card {
+  width: 100%;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.parking-card-content {
+  padding: 12px !important;
+}
+
+.parking-name {
+  font-weight: bold;
+}
+
+.parking-spaces {
+  color: #1976d2;
+}
+
+.parking-price {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #333;
+}
+
+.parking-distance {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.parking-duration {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 4px;
+}
