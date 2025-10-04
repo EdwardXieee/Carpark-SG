@@ -1,4 +1,4 @@
-import { List, ListItem, ListItemButton, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton } from '@mui/material';
+import { List, ListItem, ListItemButton, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton, Button } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 
 import type { NearbyCarpark } from '../types/carpark';
@@ -12,6 +12,7 @@ type CarparkSidebarProps = {
   focusedCarpark: NearbyCarpark | null;
   onSelectCarpark: (carpark: NearbyCarpark) => void;
   onCloseDetails: () => void;
+  anchor: { lat: number; lon: number } | null;
 };
 
 export function CarparkSidebar({
@@ -21,9 +22,18 @@ export function CarparkSidebar({
   focusedCarpark,
   onSelectCarpark,
   onCloseDetails,
+  anchor,
 }: CarparkSidebarProps) {
+  const buildDirectionsUrl = (lat: number, lon: number) => {
+    const searchParams = new URLSearchParams({ api: '1', destination: `${lat},${lon}` });
+    if (anchor) {
+      searchParams.set('origin', `${anchor.lat},${anchor.lon}`);
+    }
+    return `https://www.google.com/maps/dir/?${searchParams.toString()}`;
+  };
+
   return (
-    <Box className="parking-list" sx={{ width: 300, height: '100%', bgcolor: '#e8f5e9' }}>
+    <Box className="parking-list" sx={{ width: 370, height: '100%', bgcolor: '#e8f5e9' }}>
       {!focusedCarpark && (
         <Box className="sort-container">
           <Typography variant="subtitle1">Sort by:</Typography>
@@ -88,6 +98,19 @@ export function CarparkSidebar({
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                   Max height {focusedCarpark.maxHeightMeters.toFixed(1)} m • Max stay {focusedCarpark.durationMinutes} min
                 </Typography>
+
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    href={buildDirectionsUrl(focusedCarpark.latitude, focusedCarpark.longitude)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Go Here
+                  </Button>
+                </Box>
               </CardContent>
             </Card>
           </ListItem>

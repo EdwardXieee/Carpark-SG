@@ -176,6 +176,7 @@ function App() {
             focusedCarpark={focusedCarpark}
             onSelectCarpark={handleListItemSelect}
             onCloseDetails={handleCloseDetails}
+            anchor={anchor}
           />
         </Box>
       </Box>
