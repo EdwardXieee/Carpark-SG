@@ -12,6 +12,7 @@ import { useNearbyCarparks } from './hooks/useNearbyCarparks';
 import type { NearbyCarpark } from './types/carpark';
 import { getDistanceInKm } from './utils/geo';
 import { generateMockDetails } from './utils/mockCarparkDetails';
+import { TimeSelection } from './components/TimeSelection';
 
 type Anchor = { lat: number; lon: number } | null;
 type SortBy = 'distance' | 'price';
@@ -37,6 +38,9 @@ function App() {
   const [selectedLocation, setSelectedLocation] = useState<Anchor>(null);
   const [currentLocation, setCurrentLocation] = useState<Anchor>(null);
   const anchor = currentLocation ?? selectedLocation;
+
+  const [startTime, setStartTime] = useState(() => new Date());
+  const [endTime, setEndTime] = useState(() => new Date(new Date().getTime() + 60 * 60 * 1000));
 
   useEffect(() => {
     setSelectedLocation({ lat: mapCenter[0], lon: mapCenter[1] });
@@ -153,8 +157,14 @@ function App() {
 
         <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
           <Box sx={{ position: 'relative', flexGrow: 1, height: '100%' }}>
-            <Box sx={{ position: 'absolute', top: 20, left: 20, zIndex: 1000 }}>
+            <Box sx={{ position: 'absolute', top: 20, left: 20, zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 1 }}>
               <SearchBox onSelectResult={handleSearchSelect} />
+              <TimeSelection
+                startTime={startTime}
+                endTime={endTime}
+                onStartTimeChange={setStartTime}
+                onEndTimeChange={setEndTime}
+              />
             </Box>
 
             <CarparkMap
@@ -185,3 +195,4 @@ function App() {
 }
 
 export default App;
+
