@@ -1,4 +1,4 @@
-import { Stack } from '@mui/material';
+import { Box, Stack } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
@@ -14,7 +14,7 @@ interface TimeSelectionProps {
 export function TimeSelection({ startTime, endTime, onStartTimeChange, onEndTimeChange }: TimeSelectionProps) {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Stack direction="row" spacing={0.5} sx={{ backgroundColor: 'white', borderRadius: 1, p: 0.5 }}>
+      <Stack direction="row" spacing={0.5} sx={{ width: '100%' }}>
         <DateTimePicker
           label="Start Time"
           value={dayjs(startTime)}
@@ -24,6 +24,7 @@ export function TimeSelection({ startTime, endTime, onStartTimeChange, onEndTime
             textField: {
               size: 'small',
               onKeyDown: (e) => e.preventDefault(),
+              sx: { width: '100%' },
             },
           }}
         />
@@ -36,6 +37,7 @@ export function TimeSelection({ startTime, endTime, onStartTimeChange, onEndTime
             textField: {
               size: 'small',
               onKeyDown: (e) => e.preventDefault(),
+              sx: { width: '100%' },
             },
           }}
         />

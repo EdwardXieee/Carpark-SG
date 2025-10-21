@@ -11,9 +11,11 @@ interface SearchResult {
 
 interface SearchBoxProps {
   onSelectResult: (result: SearchResult) => void;
+  onSearchClick: (query: string) => void;
+  middleContent?: React.ReactNode;
 }
 
-export default function SearchBox({ onSelectResult }: SearchBoxProps) {
+export default function SearchBox({ onSelectResult, onSearchClick, middleContent }: SearchBoxProps) {
   const [inputValue, setInputValue] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -55,8 +57,8 @@ export default function SearchBox({ onSelectResult }: SearchBoxProps) {
   };
 
   return (
-    <div style={{ position: 'relative', width: 400 }}>
-      <div style={{ display: 'flex' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <TextField
             fullWidth
             variant="outlined"
@@ -65,6 +67,7 @@ export default function SearchBox({ onSelectResult }: SearchBoxProps) {
             onChange={handleChange}
             size="small"
             sx={{
+                flexGrow: 1,
                 bgcolor: '#ffffff',
                 borderRadius: '4px',
                 '& .MuiOutlinedInput-notchedOutline': {
@@ -86,14 +89,17 @@ export default function SearchBox({ onSelectResult }: SearchBoxProps) {
             }}
         />
 
+        {middleContent}
+
         <Fab
           color="primary"
           size="small"
           disabled={isSearching}
+          onClick={() => onSearchClick(inputValue)}
           sx={{
             ml: 1,
             bgcolor: '#4caf50',
-            width: 45,
+            width: 70,
             height: 40,
             minHeight: 40,
             borderRadius: '50%',
