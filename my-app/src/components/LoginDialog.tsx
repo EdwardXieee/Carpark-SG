@@ -32,7 +32,7 @@ export function LoginDialog({ open, onClose, onSuccess }: LoginDialogProps) {
 
   const handleLogin = async () => {
     setError(null);
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+    const clientId = "861950972007-ru8kog58u7oa47o55h64pci12edn6scu.apps.googleusercontent.com";
 
     if (!clientId) {
       setError('Missing Google Client ID. Please configure VITE_GOOGLE_CLIENT_ID in your environment.');
