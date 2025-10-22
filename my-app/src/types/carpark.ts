@@ -4,13 +4,36 @@ export type CarparkLocation = {
   longitude: number;
 };
 
-export type NearbyCarpark = {
+export type CarparkAvailabilityLot = {
+  total: number;
+  type: string;
+  available: number;
+};
+
+export type CarparkAvailabilityResponse = {
+  success: boolean;
+  code: string;
+  message: string;
+  data: Array<{
+    id: string;
+    lots: CarparkAvailabilityLot[];
+  }>;
+};
+
+export type CarparkOccupancy = {
+  availableLots: number | null;
+  totalLots: number | null;
+  lotType: string | null;
+  occupancyRatio: number | null;
+  congestionLevel: 'low' | 'medium' | 'high' | 'unknown';
+};
+
+export type NearbyCarpark = CarparkOccupancy & {
   id: string;
   name: string;
   distanceKm: number;
   walkingMinutes: number;
   price: number;
-  spaces: number;
   durationMinutes: number;
   latitude: number;
   longitude: number;

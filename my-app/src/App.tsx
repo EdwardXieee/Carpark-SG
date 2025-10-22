@@ -1,20 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, AppBar, Toolbar, Typography, ThemeProvider, createTheme } from '@mui/material';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  ThemeProvider,
+  createTheme,
+  Button,
+  Avatar,
+  Tooltip,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+} from '@mui/material';
+import {
+  Logout as LogoutIcon,
+  Favorite as FavoriteIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+} from '@mui/icons-material';
 import type { Map as LeafletMap } from 'leaflet';
 
 import SearchBox from './SearchBox';
 import { CarparkMap } from './components/CarparkMap';
 import { CarparkSidebar } from './components/CarparkSidebar';
+import { LoginDialog } from './components/LoginDialog';
 import './App.css';
 
+import { useCarparkAvailability } from './hooks/useCarparkAvailability';
 import { useCarparkLocations } from './hooks/useCarparkLocations';
 import { useNearbyCarparks } from './hooks/useNearbyCarparks';
 import type { NearbyCarpark } from './types/carpark';
+import { formatDateTime } from './utils/datetime';
 import { getDistanceInKm } from './utils/geo';
 import { generateMockDetails } from './utils/mockCarparkDetails';
 
 type Anchor = { lat: number; lon: number } | null;
 type SortBy = 'distance' | 'price';
+type AuthState = {
+  isAuthenticated: boolean;
+  email: string | null;
+  appToken: string | null;
+  googleToken: string | null;
+};
 
 const theme = createTheme({
   palette: {
@@ -33,6 +63,16 @@ function App() {
   const [sortBy, setSortBy] = useState<SortBy>('distance');
   const [mapCenter, setMapCenter] = useState<[number, number]>([1.2949927, 103.7733938]);
   const mapRef = useRef<LeafletMap | null>(null);
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    email: null,
+    appToken: null,
+    googleToken: null,
+  });
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
+  const [favoritesMenuAnchor, setFavoritesMenuAnchor] = useState<null | HTMLElement>(null);
 
   const [selectedLocation, setSelectedLocation] = useState<Anchor>(null);
   const [currentLocation, setCurrentLocation] = useState<Anchor>(null);
@@ -43,7 +83,77 @@ function App() {
   }, []);
 
   const carparks = useCarparkLocations();
-  const nearbyCarparks = useNearbyCarparks(carparks, anchor);
+  const carparkIds = useMemo(() => carparks.map((carpark) => carpark.id), [carparks]);
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
+  const timeRange = useMemo(() => {
+    const start = new Date();
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+    return {
+      parkingStartTime: formatDateTime(start),
+      parkingEndTime: formatDateTime(end),
+    };
+  }, []);
+
+  const {
+    availability,
+    loading: availabilityLoading,
+    error: availabilityError,
+    refetch: refetchAvailability,
+  } = useCarparkAvailability(carparkIds, {
+    parkingStartTime: timeRange.parkingStartTime,
+    parkingEndTime: timeRange.parkingEndTime,
+    lotType: '',
+    enabled: carparkIds.length > 0,
+  });
+
+  const nearbyCarparks = useNearbyCarparks(carparks, anchor, availability);
+  const favoriteCarparkDetails = useMemo<NearbyCarpark[]>(() => {
+    const baseLat = anchor?.lat ?? mapCenter[0];
+    const baseLon = anchor?.lon ?? mapCenter[1];
+
+    return favoriteIds
+      .map((id) => {
+        const carpark = carparks.find((item) => item.id === id);
+        if (!carpark) {
+          return null;
+        }
+
+        const distanceKm = getDistanceInKm(baseLat, baseLon, carpark.latitude, carpark.longitude);
+        const details = generateMockDetails(carpark, distanceKm);
+        const occupancy = availability[id];
+
+        if (occupancy) {
+          details.availableLots = occupancy.availableLots;
+          details.totalLots = occupancy.totalLots;
+          details.lotType = occupancy.lotType;
+          details.occupancyRatio = occupancy.occupancyRatio;
+          details.congestionLevel = occupancy.congestionLevel;
+        }
+
+        return details;
+      })
+      .filter((item): item is NearbyCarpark => item !== null);
+  }, [anchor, availability, carparks, favoriteIds, mapCenter]);
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.email) {
+      const stored = localStorage.getItem(`favorites:${authState.email}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setFavoriteIds(parsed);
+          }
+        } catch (error) {
+          console.warn('Failed to parse stored favourites', error);
+        }
+      } else {
+        setFavoriteIds([]);
+      }
+    } else {
+      setFavoriteIds([]);
+    }
+  }, [authState]);
 
   const [focusedCarparkId, setFocusedCarparkId] = useState<string | null>(null);
 
@@ -78,8 +188,19 @@ function App() {
     const baseLat = anchor?.lat ?? centerLat;
     const baseLon = anchor?.lon ?? centerLon;
     const distanceKm = getDistanceInKm(baseLat, baseLon, location.latitude, location.longitude);
-    return generateMockDetails(location, distanceKm);
-  }, [focusedCarparkId, carparks, anchor, centerLat, centerLon]);
+    const details = generateMockDetails(location, distanceKm);
+    const occupancy = availability[location.id];
+
+    if (occupancy) {
+      details.availableLots = occupancy.availableLots;
+      details.totalLots = occupancy.totalLots;
+      details.lotType = occupancy.lotType;
+      details.occupancyRatio = occupancy.occupancyRatio;
+      details.congestionLevel = occupancy.congestionLevel;
+    }
+
+    return details;
+  }, [focusedCarparkId, carparks, anchor, centerLat, centerLon, availability]);
 
   const sortedNearbyCarparks = useMemo(() => {
     const sorted = [...nearbyCarparks];
@@ -140,6 +261,90 @@ function App() {
     panTo(result.lat, result.lon, 15);
   };
 
+  const handleLoginSuccess = (params: { email: string; appToken: string; googleToken: string }) => {
+    setAuthState({
+      isAuthenticated: true,
+      email: params.email,
+      appToken: params.appToken,
+      googleToken: params.googleToken,
+    });
+
+    localStorage.setItem('auth:lastEmail', params.email);
+  };
+
+  const handleLogout = () => {
+    setAuthState({
+      isAuthenticated: false,
+      email: null,
+      appToken: null,
+      googleToken: null,
+    });
+    setFavoriteIds([]);
+    setProfileMenuAnchor(null);
+  };
+
+  const handleToggleFavorite = (carparkId: string) => {
+    if (!authState.isAuthenticated || !authState.email) {
+      setLoginDialogOpen(true);
+      return;
+    }
+
+    setFavoriteIds((prev) => {
+      let next: string[];
+      if (prev.includes(carparkId)) {
+        next = prev.filter((id) => id !== carparkId);
+      } else {
+        next = [...prev, carparkId];
+      }
+
+      localStorage.setItem(`favorites:${authState.email}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const openProfileMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setProfileMenuAnchor(event.currentTarget);
+  };
+
+  const closeProfileMenu = () => {
+    setProfileMenuAnchor(null);
+  };
+
+  const openFavoritesMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!authState.isAuthenticated) {
+      setLoginDialogOpen(true);
+      return;
+    }
+    setFavoritesMenuAnchor(event.currentTarget);
+  };
+
+  const closeFavoritesMenu = () => {
+    setFavoritesMenuAnchor(null);
+  };
+
+  const handleFavoriteSelect = (carpark: NearbyCarpark) => {
+    closeFavoritesMenu();
+    closeProfileMenu();
+    setFocusedCarparkId(carpark.id);
+    panTo(carpark.latitude, carpark.longitude, 17);
+  };
+
+  const formatFavoriteAvailability = (carpark?: NearbyCarpark) => {
+    if (!carpark) {
+      return 'No live data';
+    }
+    if (carpark.availableLots !== null && carpark.totalLots !== null) {
+      const ratio =
+        carpark.occupancyRatio !== null ? ` • Vacancy ${(carpark.occupancyRatio * 100).toFixed(0)}%` : '';
+      return `${carpark.availableLots}/${carpark.totalLots} lots${ratio}`;
+    }
+    if (carpark.availableLots !== null) {
+      return `${carpark.availableLots} lots`;
+    }
+    return 'No live data';
+  };
+  const hasFavorites = favoriteCarparkDetails.length > 0;
+
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
@@ -148,6 +353,106 @@ function App() {
             <Typography variant="h6" sx={{ flexGrow: 1, color: 'white', fontWeight: 'bold' }}>
               SG Car Park Finder+
             </Typography>
+            <Tooltip
+              title={authState.isAuthenticated
+                ? hasFavorites
+                  ? 'View bookmarked car parks'
+                  : 'No bookmarked car parks yet'
+                : 'Sign in to manage bookmarks'}
+            >
+              <IconButton
+                color="inherit"
+                onClick={openFavoritesMenu}
+                size="small"
+                sx={{ ml: 1 }}
+              >
+                {authState.isAuthenticated && hasFavorites ? (
+                  <FavoriteIcon color="error" fontSize="small" />
+                ) : (
+                  <FavoriteBorderIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+            {authState.isAuthenticated ? (
+              <>
+                <Tooltip title={authState.email ?? 'Profile'}>
+                  <IconButton
+                    color="inherit"
+                    onClick={openProfileMenu}
+                    size="small"
+                    sx={{ ml: 1 }}
+                  >
+                    <Avatar sx={{ bgcolor: '#2e7d32', width: 32, height: 32 }}>
+                      {authState.email?.charAt(0).toUpperCase() ?? '?'}
+                    </Avatar>
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={profileMenuAnchor}
+                  open={Boolean(profileMenuAnchor)}
+                  onClose={closeProfileMenu}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                  <MenuItem disabled>
+                    <ListItemText primary={authState.email ?? ''} secondary="Signed in" />
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem onClick={handleLogout}>
+                    <ListItemIcon>
+                      <LogoutIcon fontSize="small" />
+                    </ListItemIcon>
+                    Sign out
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <Button
+                color="inherit"
+                variant="outlined"
+                onClick={() => setLoginDialogOpen(true)}
+              >
+                Sign in
+              </Button>
+            )}
+            <Menu
+              anchorEl={favoritesMenuAnchor}
+              open={Boolean(favoritesMenuAnchor)}
+              onClose={closeFavoritesMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              {!authState.isAuthenticated ? (
+                <MenuItem disabled>
+                  <ListItemIcon>
+                    <FavoriteBorderIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Sign in to manage bookmarks" />
+                </MenuItem>
+              ) : favoriteCarparkDetails.length === 0 ? (
+                <MenuItem disabled>
+                  <ListItemIcon>
+                    <FavoriteBorderIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="No bookmarked car parks yet" />
+                </MenuItem>
+              ) : (
+                favoriteCarparkDetails.map((item) => (
+                  <MenuItem
+                    key={item.id}
+                    onClick={() => handleFavoriteSelect(item)}
+                  >
+                    <ListItemIcon>
+                      <FavoriteIcon fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.id}
+                      secondary={formatFavoriteAvailability(item)}
+                    />
+                  </MenuItem>
+                ))
+              )}
+            </Menu>
           </Toolbar>
         </AppBar>
 
@@ -163,6 +468,7 @@ function App() {
               carparks={carparks}
               nearbyCarparkIds={nearbyCarparkIds}
               focusedCarparkId={focusedCarparkId}
+              availability={availability}
               onMarkerSelect={(carpark) => handleMarkerSelect(carpark.id, carpark.latitude, carpark.longitude)}
               onLocated={handleLocate}
               mapRef={mapRef}
@@ -177,8 +483,20 @@ function App() {
             onSelectCarpark={handleListItemSelect}
             onCloseDetails={handleCloseDetails}
             anchor={anchor}
+            availabilityLoading={availabilityLoading}
+            availabilityError={availabilityError}
+            onRefreshAvailability={refetchAvailability}
+            favorites={favoriteSet}
+            onToggleFavorite={handleToggleFavorite}
+            canFavorite={authState.isAuthenticated}
           />
         </Box>
+
+        <LoginDialog
+          open={loginDialogOpen}
+          onClose={() => setLoginDialogOpen(false)}
+          onSuccess={handleLoginSuccess}
+        />
       </Box>
     </ThemeProvider>
   );

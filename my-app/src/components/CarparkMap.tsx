@@ -6,7 +6,7 @@ import L from 'leaflet';
 
 import 'leaflet/dist/leaflet.css';
 
-import type { CarparkLocation } from '../types/carpark';
+import type { CarparkLocation, CarparkOccupancy } from '../types/carpark';
 
 type Anchor = { lat: number; lon: number } | null;
 
@@ -16,6 +16,7 @@ type CarparkMapProps = {
   carparks: CarparkLocation[];
   nearbyCarparkIds: Set<string>;
   focusedCarparkId: string | null;
+  availability: Record<string, CarparkOccupancy>;
   onMarkerSelect: (carpark: CarparkLocation) => void;
   onLocated: (lat: number, lon: number) => void;
   mapRef: MutableRefObject<L.Map | null>;
@@ -33,17 +34,50 @@ const createLocationIcon = () =>
     iconAnchor: [18, 36],
   });
 
-const createCarparkIcon = (color: string) =>
-  L.divIcon({
+const CONGESTION_LEVELS = ['low', 'medium', 'high', 'unknown'] as const;
+const MARKER_STATES = ['default', 'nearby', 'focused'] as const;
+
+type CongestionLevel = typeof CONGESTION_LEVELS[number];
+type MarkerState = typeof MARKER_STATES[number];
+
+const LEVEL_COLORS: Record<CongestionLevel, string> = {
+  low: '#ffcdd2',
+  medium: '#ef9a9a',
+  high: '#b71c1c',
+  unknown: '#78909c',
+};
+
+const STATE_STYLES: Record<
+  MarkerState,
+  {
+    size: number;
+    borderColor: string;
+    borderWidth: number;
+  }
+> = {
+  default: { size: 28, borderColor: '#ffffff', borderWidth: 2 },
+  nearby: { size: 30, borderColor: '#4caf50', borderWidth: 3 },
+  focused: { size: 34, borderColor: '#1b5e20', borderWidth: 4 },
+};
+
+const createCarparkIcon = (params: {
+  fillColor: string;
+  borderColor: string;
+  borderWidth: number;
+  size: number;
+}) => {
+  const { fillColor, borderColor, borderWidth, size } = params;
+  const anchor = size / 2;
+
+  return L.divIcon({
     className: 'carpark-marker',
-    html: `<div style="background-color: ${color}; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; font-weight: bold; box-shadow: 0 0 5px rgba(0,0,0,0.3);">
-             <svg xmlns="http://www.w3.org/2000/svg" height="16" viewBox="0 0 24 24" width="16" fill="#ffffff">
-               <path d="M13 3H6v18h4v-6h3c3.31 0 6-2.69 6-6s-2.69-6-6-6zm.2 8H10V7h3.2c1.1 0 2 .9 2 2s-.9 2-2 2z"/>
-             </svg>
-           </div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    html: `<div style="background-color: ${fillColor}; color: #ffffff; border-radius: 50%; width: ${size}px; height: ${size}px; border: ${borderWidth}px solid ${borderColor}; display: flex; justify-content: center; align-items: center; font-weight: 700; box-shadow: 0 0 6px rgba(0, 0, 0, 0.35); font-size: ${Math.round(
+      size * 0.5,
+    )}px;">P</div>`,
+    iconSize: [size, size],
+    iconAnchor: [anchor, anchor],
   });
+};
 
 type LocationButtonProps = {
   onLocated?: (lat: number, lon: number) => void;
@@ -58,7 +92,7 @@ function LocationButton({ onLocated }: LocationButtonProps) {
       onLocated?.(e.latlng.lat, e.latlng.lng);
     });
     map.once('locationerror', (err: L.ErrorEvent) => {
-      console.error('定位失败：', err.message);
+      console.error('Unable to locate current position:', err.message);
     });
   };
 
@@ -74,14 +108,14 @@ function LocationButton({ onLocated }: LocationButtonProps) {
         zIndex: 1000,
         backgroundColor: '#4caf50',
       }}
-      aria-label="定位到当前位置"
+      aria-label="Go to current location"
     >
       <MyLocationIcon fontSize="small" />
     </Fab>
   );
 }
 
-// 修复Leaflet默认图标
+// Fix default Leaflet marker assets
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -95,14 +129,32 @@ export function CarparkMap({
   carparks,
   nearbyCarparkIds,
   focusedCarparkId,
+  availability,
   onMarkerSelect,
   onLocated,
   mapRef,
 }: CarparkMapProps) {
   const locationIcon = useMemo(() => createLocationIcon(), []);
-  const defaultCarparkIcon = useMemo(() => createCarparkIcon('#78909c'), []);
-  const nearbyCarparkIcon = useMemo(() => createCarparkIcon('#4caf50'), []);
-  const selectedCarparkIcon = useMemo(() => createCarparkIcon('#d32f2f'), []);
+  const markerIcons = useMemo(() => {
+    const iconMap = new Map<string, L.DivIcon>();
+
+    CONGESTION_LEVELS.forEach((level) => {
+      MARKER_STATES.forEach((state) => {
+        const style = STATE_STYLES[state];
+        iconMap.set(
+          `${level}-${state}`,
+          createCarparkIcon({
+            fillColor: LEVEL_COLORS[level],
+            borderColor: style.borderColor,
+            borderWidth: style.borderWidth,
+            size: style.size,
+          }),
+        );
+      });
+    });
+
+    return iconMap;
+  }, []);
 
   return (
     <MapContainer
@@ -126,17 +178,29 @@ export function CarparkMap({
       {carparks.map((carpark) => {
         const isFocused = focusedCarparkId === carpark.id;
         const isNearby = nearbyCarparkIds.has(carpark.id);
-        const icon = isFocused
-          ? selectedCarparkIcon
-          : isNearby
-            ? nearbyCarparkIcon
-            : defaultCarparkIcon;
+        const occupancy = availability[carpark.id];
+        const level: CongestionLevel = occupancy?.congestionLevel ?? 'unknown';
+        const state: MarkerState = isFocused ? 'focused' : isNearby ? 'nearby' : 'default';
+        const iconKey = `${level}-${state}`;
+        const fallbackKey = `unknown-${state}`;
+        const icon =
+          markerIcons.get(iconKey) ??
+          markerIcons.get(fallbackKey) ??
+          markerIcons.get('unknown-default')!;
+        const title =
+          occupancy && occupancy.availableLots !== null
+            ? occupancy.totalLots !== null
+              ? `${occupancy.availableLots}/${occupancy.totalLots} lots available (type ${occupancy.lotType ?? 'N/A'})`
+              : `${occupancy.availableLots} lots available`
+            : 'Availability unavailable';
 
         return (
           <Marker
             key={carpark.id}
             position={[carpark.latitude, carpark.longitude]}
             icon={icon}
+            riseOnHover
+            title={title}
             eventHandlers={{
               click: () => onMarkerSelect(carpark),
             }}
