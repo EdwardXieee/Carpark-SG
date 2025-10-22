@@ -1,23 +1,14 @@
-export type CarparkLocation = {
+export type Carpark = {
   id: string;
+  address: string;
   latitude: number;
   longitude: number;
 };
 
-export type CarparkAvailabilityLot = {
-  total: number;
-  type: string;
-  available: number;
-};
-
-export type CarparkAvailabilityResponse = {
-  success: boolean;
-  code: string;
-  message: string;
-  data: Array<{
-    id: string;
-    lots: CarparkAvailabilityLot[];
-  }>;
+export type CarparkLocation = {
+  id: string;
+  latitude: number;
+  longitude: number;
 };
 
 export type CarparkOccupancy = {
@@ -28,18 +19,25 @@ export type CarparkOccupancy = {
   congestionLevel: 'low' | 'medium' | 'high' | 'unknown';
 };
 
-export type NearbyCarpark = CarparkOccupancy & {
+export type NearbyCarpark = {
   id: string;
-  name: string;
-  distanceKm: number;
-  walkingMinutes: number;
-  price: number;
-  durationMinutes: number;
+  address: string;
   latitude: number;
   longitude: number;
-  address: string;
-  rates: string;
-  paymentMethods: string[];
-  freeParking: string;
-  maxHeightMeters: number;
+  distanceKm: number;
+  totalLots: number | null;
+  availableLots: number | null;
+  estimatedFee: number | null;
+  lotType?: string;
+  agency?: string;
+  type?: string;
+  parkingSystemType?: string;
+  shortTermParkingPeriod?: string;
+  freeParkingPeriod?: string;
+  nightParkingFlag?: number;
+  basementFlag?: number;
+  deckCount?: number;
+  gantryHeight?: number;
+  occupancyRatio?: number | null;
+  congestionLevel?: 'low' | 'medium' | 'high' | 'unknown';
 };

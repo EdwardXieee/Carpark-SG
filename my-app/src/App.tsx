@@ -23,7 +23,7 @@ import {
 } from '@mui/icons-material';
 import type { Map as LeafletMap } from 'leaflet';
 
-import SearchBox from './SearchBox';
+import SearchBox from './components/SearchBox';
 import { CarparkMap } from './components/CarparkMap';
 import { CarparkSidebar } from './components/CarparkSidebar';
 import { LoginDialog } from './components/LoginDialog';
@@ -32,19 +32,10 @@ import './App.css';
 import { useCarparkAvailability } from './hooks/useCarparkAvailability';
 import { useCarparkLocations } from './hooks/useCarparkLocations';
 import { useNearbyCarparks } from './hooks/useNearbyCarparks';
-import type { NearbyCarpark } from './types/carpark';
-import { formatDateTime } from './utils/datetime';
+import type { CarparkOccupancy, NearbyCarpark } from './types/carpark';
+import { TimeSelection } from './components/TimeSelection';
 import { getDistanceInKm } from './utils/geo';
-import { generateMockDetails } from './utils/mockCarparkDetails';
-
-type Anchor = { lat: number; lon: number } | null;
-type SortBy = 'distance' | 'price';
-type AuthState = {
-  isAuthenticated: boolean;
-  email: string | null;
-  appToken: string | null;
-  googleToken: string | null;
-};
+import VehicleTypeSelection from './components/VehicleTypeSelection';
 
 const theme = createTheme({
   palette: {
@@ -58,6 +49,42 @@ const theme = createTheme({
     },
   },
 });
+
+const formatDate = (date: Date) => {
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const seconds = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const computeCongestionLevel = (ratio: number | null) => {
+  if (ratio === null) {
+    return 'unknown';
+  }
+  if (ratio >= 0.6) return 'low';
+  if (ratio >= 0.3) return 'medium';
+  return 'high';
+};
+
+const computeOccupancyRatio = (available: number | null, total: number | null) => {
+  if (available === null || total === null || total === 0) {
+    return null;
+  }
+  return available / total;
+};
+
+type Anchor = { lat: number; lon: number } | null;
+type SortBy = 'distance' | 'price' | 'availability';
+type AuthState = {
+  isAuthenticated: boolean;
+  email: string | null;
+  appToken: string | null;
+  googleToken: string | null;
+};
 
 function App() {
   const [sortBy, setSortBy] = useState<SortBy>('distance');
@@ -78,22 +105,24 @@ function App() {
   const [currentLocation, setCurrentLocation] = useState<Anchor>(null);
   const anchor = currentLocation ?? selectedLocation;
 
+  const [startTime, setStartTime] = useState(() => new Date());
+  const [endTime, setEndTime] = useState(() => new Date(new Date().getTime() + 60 * 60 * 1000));
+  const [vehicleType, setVehicleType] = useState('C');
+
   useEffect(() => {
     setSelectedLocation({ lat: mapCenter[0], lon: mapCenter[1] });
   }, []);
 
   const carparks = useCarparkLocations();
   const carparkIds = useMemo(() => carparks.map((carpark) => carpark.id), [carparks]);
-  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
-  const timeRange = useMemo(() => {
-    const start = new Date();
-    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
-    return {
-      parkingStartTime: formatDateTime(start),
-      parkingEndTime: formatDateTime(end),
-    };
-  }, []);
+  const { nearbyCarparks, loading: nearbyLoading } = useNearbyCarparks(
+    carparks,
+    anchor,
+    startTime,
+    endTime,
+    vehicleType,
+  );
 
   const {
     availability,
@@ -101,40 +130,39 @@ function App() {
     error: availabilityError,
     refetch: refetchAvailability,
   } = useCarparkAvailability(carparkIds, {
-    parkingStartTime: timeRange.parkingStartTime,
-    parkingEndTime: timeRange.parkingEndTime,
-    lotType: '',
+    parkingStartTime: formatDate(startTime),
+    parkingEndTime: formatDate(endTime),
+    lotType: vehicleType,
     enabled: carparkIds.length > 0,
   });
 
-  const nearbyCarparks = useNearbyCarparks(carparks, anchor, availability);
-  const favoriteCarparkDetails = useMemo<NearbyCarpark[]>(() => {
-    const baseLat = anchor?.lat ?? mapCenter[0];
-    const baseLon = anchor?.lon ?? mapCenter[1];
+  const decoratedNearbyCarparks = useMemo(() =>
+    nearbyCarparks.map((carpark) => {
+      const occupancyRatio = computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null);
+      return {
+        ...carpark,
+        occupancyRatio,
+        congestionLevel: computeCongestionLevel(occupancyRatio),
+      } as NearbyCarpark;
+    }),
+  [nearbyCarparks]);
 
-    return favoriteIds
-      .map((id) => {
-        const carpark = carparks.find((item) => item.id === id);
-        if (!carpark) {
-          return null;
-        }
+  const availabilityMap = useMemo(() => {
+    const map: Record<string, CarparkOccupancy> = { ...availability };
 
-        const distanceKm = getDistanceInKm(baseLat, baseLon, carpark.latitude, carpark.longitude);
-        const details = generateMockDetails(carpark, distanceKm);
-        const occupancy = availability[id];
+    decoratedNearbyCarparks.forEach((carpark) => {
+      map[carpark.id] = {
+        availableLots: carpark.availableLots ?? null,
+        totalLots: carpark.totalLots ?? null,
+        lotType: carpark.lotType ?? null,
+        occupancyRatio: carpark.occupancyRatio ?? computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null),
+        congestionLevel: carpark.congestionLevel ?? computeCongestionLevel(computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null)),
+      };
+    });
 
-        if (occupancy) {
-          details.availableLots = occupancy.availableLots;
-          details.totalLots = occupancy.totalLots;
-          details.lotType = occupancy.lotType;
-          details.occupancyRatio = occupancy.occupancyRatio;
-          details.congestionLevel = occupancy.congestionLevel;
-        }
+    return map;
+  }, [availability, decoratedNearbyCarparks]);
 
-        return details;
-      })
-      .filter((item): item is NearbyCarpark => item !== null);
-  }, [anchor, availability, carparks, favoriteIds, mapCenter]);
   useEffect(() => {
     if (authState.isAuthenticated && authState.email) {
       const stored = localStorage.getItem(`favorites:${authState.email}`);
@@ -156,63 +184,169 @@ function App() {
   }, [authState]);
 
   const [focusedCarparkId, setFocusedCarparkId] = useState<string | null>(null);
+  const [focusedCarpark, setFocusedCarpark] = useState<NearbyCarpark | null>(null);
 
   useEffect(() => {
     if (!focusedCarparkId) {
+      setFocusedCarpark(null);
       return;
     }
 
-    const exists = carparks.some((carpark) => carpark.id === focusedCarparkId);
-    if (!exists) {
-      setFocusedCarparkId(null);
-      if (anchor) {
-        const anchorPosition: [number, number] = [anchor.lat, anchor.lon];
-        setMapCenter(anchorPosition);
-        mapRef.current?.setView(anchorPosition, 16);
+    const carparkLocation = carparks.find((c) => c.id === focusedCarparkId);
+    if (!carparkLocation) {
+      setFocusedCarpark(null);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const fetchDetails = async () => {
+      setFocusedCarpark(null);
+      try {
+        const requestBody = {
+          parkingStartTime: formatDate(startTime),
+          parkingEndTime: formatDate(endTime),
+          carParkIds: [focusedCarparkId],
+          lotType: vehicleType,
+        };
+
+        const [lotsResponse, ratesResponse, infoResponse] = await Promise.all([
+          fetch('/api/car-park/query/lots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }),
+          fetch('/api/car-park/query/parking-rate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }),
+          fetch('/api/car-park/query/info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }),
+        ]);
+
+        if (!lotsResponse.ok || !ratesResponse.ok || !infoResponse.ok) {
+          throw new Error('Failed to fetch carpark details');
+        }
+
+        const lotsData = await lotsResponse.json();
+        const ratesData = await ratesResponse.json();
+        const infoData = await infoResponse.json();
+
+        const lotsInfo = lotsData.data?.find((d: any) => d.id === focusedCarparkId);
+        const ratesInfo = ratesData.data?.find((d: any) => d.id === focusedCarparkId);
+        const info = infoData.data?.[0];
+
+        const availableLots = lotsInfo?.lots?.[0]?.available ?? null;
+        const totalLots = lotsInfo?.lots?.[0]?.total ?? null;
+        const occupancyRatio = computeOccupancyRatio(availableLots, totalLots);
+        const distanceKm = anchor
+          ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude)
+          : 0;
+
+        const detailedCarpark: NearbyCarpark = {
+          id: carparkLocation.id,
+          address: info?.address ?? 'Address not available',
+          latitude: carparkLocation.latitude,
+          longitude: carparkLocation.longitude,
+          distanceKm,
+          totalLots,
+          availableLots,
+          estimatedFee: ratesInfo?.rates?.[0]?.estimatedFee ?? null,
+          lotType: ratesInfo?.type,
+          agency: info?.agency ?? ratesInfo?.agency,
+          type: info?.type,
+          parkingSystemType: info?.parkingSystemType ?? ratesInfo?.parkingSystemType,
+          shortTermParkingPeriod: info?.shortTermParkingPeriod ?? ratesInfo?.shortTermParkingPeriod,
+          freeParkingPeriod: info?.freeParkingPeriod ?? ratesInfo?.freeParkingPeriod,
+          nightParkingFlag: info?.nightParkingFlag ?? ratesInfo?.nightParkingFlag,
+          basementFlag: info?.basementFlag ?? ratesInfo?.basementFlag,
+          deckCount: info?.deckCount ?? ratesInfo?.deckCount,
+          gantryHeight: info?.gantryHeight ?? ratesInfo?.gantryHeight,
+          occupancyRatio,
+          congestionLevel: computeCongestionLevel(occupancyRatio),
+        };
+
+        setFocusedCarpark(detailedCarpark);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Failed to fetch carpark details:', error);
+          const distanceKm = anchor
+            ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude)
+            : 0;
+          setFocusedCarpark({
+            id: carparkLocation.id,
+            address: 'Address not available',
+            latitude: carparkLocation.latitude,
+            longitude: carparkLocation.longitude,
+            distanceKm,
+            totalLots: null,
+            availableLots: null,
+            estimatedFee: null,
+            occupancyRatio: null,
+            congestionLevel: 'unknown',
+          });
+        }
       }
-    }
-  }, [carparks, focusedCarparkId, anchor]);
+    };
 
-  const [centerLat, centerLon] = mapCenter;
+    fetchDetails();
 
-  const focusedCarpark = useMemo(() => {
-    if (!focusedCarparkId) {
-      return null;
-    }
+    return () => controller.abort();
+  }, [focusedCarparkId, carparks, anchor, startTime, endTime, vehicleType]);
 
-    const location = carparks.find((carpark) => carpark.id === focusedCarparkId);
-    if (!location) {
-      return null;
-    }
+  const favoriteCarparkDetails = useMemo(() => {
+    return favoriteIds
+      .map((id) => {
+        const location = carparks.find((item) => item.id === id);
+        if (!location) {
+          return null;
+        }
 
-    const baseLat = anchor?.lat ?? centerLat;
-    const baseLon = anchor?.lon ?? centerLon;
-    const distanceKm = getDistanceInKm(baseLat, baseLon, location.latitude, location.longitude);
-    const details = generateMockDetails(location, distanceKm);
-    const occupancy = availability[location.id];
+        const occupancy = availabilityMap[id];
+        const availableLots = occupancy?.availableLots ?? null;
+        const totalLots = occupancy?.totalLots ?? null;
+        const occupancyRatio = occupancy?.occupancyRatio ?? computeOccupancyRatio(availableLots, totalLots);
+        const distanceKm = anchor
+          ? getDistanceInKm(anchor.lat, anchor.lon, location.latitude, location.longitude)
+          : getDistanceInKm(mapCenter[0], mapCenter[1], location.latitude, location.longitude);
 
-    if (occupancy) {
-      details.availableLots = occupancy.availableLots;
-      details.totalLots = occupancy.totalLots;
-      details.lotType = occupancy.lotType;
-      details.occupancyRatio = occupancy.occupancyRatio;
-      details.congestionLevel = occupancy.congestionLevel;
-    }
-
-    return details;
-  }, [focusedCarparkId, carparks, anchor, centerLat, centerLon, availability]);
+        return {
+          id,
+          address: 'Address not available',
+          latitude: location.latitude,
+          longitude: location.longitude,
+          distanceKm,
+          totalLots,
+          availableLots,
+          estimatedFee: null,
+          occupancyRatio,
+          congestionLevel: computeCongestionLevel(occupancyRatio),
+        } as NearbyCarpark;
+      })
+      .filter((item): item is NearbyCarpark => item !== null);
+  }, [favoriteIds, carparks, availabilityMap, anchor, mapCenter]);
 
   const sortedNearbyCarparks = useMemo(() => {
-    const sorted = [...nearbyCarparks];
+    const sorted = [...decoratedNearbyCarparks];
     if (sortBy === 'price') {
-      return sorted.sort((a, b) => a.price - b.price);
+      return sorted.sort((a, b) => (a.estimatedFee ?? Infinity) - (b.estimatedFee ?? Infinity));
+    }
+    if (sortBy === 'availability') {
+      return sorted.sort((a, b) => (b.availableLots ?? -1) - (a.availableLots ?? -1));
     }
     return sorted.sort((a, b) => a.distanceKm - b.distanceKm);
-  }, [nearbyCarparks, sortBy]);
+  }, [decoratedNearbyCarparks, sortBy]);
 
   const nearbyCarparkIds = useMemo(
-    () => new Set(nearbyCarparks.map((carpark) => carpark.id)),
-    [nearbyCarparks],
+    () => new Set(decoratedNearbyCarparks.map((carpark) => carpark.id)),
+    [decoratedNearbyCarparks],
   );
 
   const handleSortChange = (
@@ -228,6 +362,36 @@ function App() {
     const target: [number, number] = [lat, lon];
     setMapCenter(target);
     mapRef.current?.setView(target, zoom);
+  };
+
+  const handleSearch = async (query: string) => {
+    if (query.trim() === '') {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            handleLocate(position.coords.latitude, position.coords.longitude);
+          },
+          (error) => {
+            console.error('Geolocation error:', error);
+          }
+        );
+      } else {
+        console.error('Geolocation is not supported by this browser.');
+      }
+    } else {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=sg`
+        );
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const result = data[0];
+          handleSearchSelect({ lat: parseFloat(result.lat), lon: parseFloat(result.lon) });
+        }
+      } catch (error) {
+        console.error('Geocoding error:', error);
+      }
+    }
   };
 
   const handleListItemSelect = (carpark: NearbyCarpark) => {
@@ -281,6 +445,7 @@ function App() {
     });
     setFavoriteIds([]);
     setProfileMenuAnchor(null);
+    setFavoritesMenuAnchor(null);
   };
 
   const handleToggleFavorite = (carparkId: string) => {
@@ -324,26 +489,12 @@ function App() {
 
   const handleFavoriteSelect = (carpark: NearbyCarpark) => {
     closeFavoritesMenu();
-    closeProfileMenu();
     setFocusedCarparkId(carpark.id);
     panTo(carpark.latitude, carpark.longitude, 17);
   };
 
-  const formatFavoriteAvailability = (carpark?: NearbyCarpark) => {
-    if (!carpark) {
-      return 'No live data';
-    }
-    if (carpark.availableLots !== null && carpark.totalLots !== null) {
-      const ratio =
-        carpark.occupancyRatio !== null ? ` • Vacancy ${(carpark.occupancyRatio * 100).toFixed(0)}%` : '';
-      return `${carpark.availableLots}/${carpark.totalLots} lots${ratio}`;
-    }
-    if (carpark.availableLots !== null) {
-      return `${carpark.availableLots} lots`;
-    }
-    return 'No live data';
-  };
   const hasFavorites = favoriteCarparkDetails.length > 0;
+  const favoritesSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
   return (
     <ThemeProvider theme={theme}>
@@ -447,7 +598,19 @@ function App() {
                     </ListItemIcon>
                     <ListItemText
                       primary={item.id}
-                      secondary={formatFavoriteAvailability(item)}
+                      secondary={(() => {
+                        const available = item.availableLots ?? null;
+                        const total = item.totalLots ?? null;
+                        const ratio = item.occupancyRatio ?? computeOccupancyRatio(available, total);
+                        if (available !== null && total !== null) {
+                          const suffix = ratio !== null ? ` • Vacancy ${(ratio * 100).toFixed(0)}%` : '';
+                          return `${available}/${total} lots${suffix}`;
+                        }
+                        if (available !== null) {
+                          return `${available} lots`;
+                        }
+                        return 'No live data';
+                      })()}
                     />
                   </MenuItem>
                 ))
@@ -458,8 +621,36 @@ function App() {
 
         <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
           <Box sx={{ position: 'relative', flexGrow: 1, height: '100%' }}>
-            <Box sx={{ position: 'absolute', top: 20, left: 20, zIndex: 1000 }}>
-              <SearchBox onSelectResult={handleSearchSelect} />
+            <Box sx={{
+                position: 'absolute', top: 10, left: 10, zIndex: 1000,
+                p: 2, bgcolor: 'rgba(255, 255, 255, 0.9)', borderRadius: 2, boxShadow: 3,
+                display: 'flex', flexDirection: 'column', gap: 2,
+                width: 500
+              }}>
+              <SearchBox
+                onSelectResult={handleSearchSelect}
+                middleContent={<VehicleTypeSelection vehicleType={vehicleType} setVehicleType={setVehicleType} />}
+                onSearchClick={handleSearch}
+              />
+              <TimeSelection
+                startTime={startTime}
+                endTime={endTime}
+                onStartTimeChange={setStartTime}
+                onEndTimeChange={setEndTime}
+              />
+              {availabilityError && (
+                <Typography variant="caption" color="error">
+                  Unable to load live availability: {availabilityError}
+                </Typography>
+              )}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => { void refetchAvailability(); }}
+                disabled={availabilityLoading}
+              >
+                {availabilityLoading ? 'Refreshing…' : 'Refresh availability'}
+              </Button>
             </Box>
 
             <CarparkMap
@@ -468,7 +659,7 @@ function App() {
               carparks={carparks}
               nearbyCarparkIds={nearbyCarparkIds}
               focusedCarparkId={focusedCarparkId}
-              availability={availability}
+              availability={availabilityMap}
               onMarkerSelect={(carpark) => handleMarkerSelect(carpark.id, carpark.latitude, carpark.longitude)}
               onLocated={handleLocate}
               mapRef={mapRef}
@@ -480,13 +671,14 @@ function App() {
             onSortChange={handleSortChange}
             nearbyCarparks={sortedNearbyCarparks}
             focusedCarpark={focusedCarpark}
+            focusedCarparkId={focusedCarparkId}
             onSelectCarpark={handleListItemSelect}
             onCloseDetails={handleCloseDetails}
             anchor={anchor}
-            availabilityLoading={availabilityLoading}
-            availabilityError={availabilityError}
-            onRefreshAvailability={refetchAvailability}
-            favorites={favoriteSet}
+            isLoading={nearbyLoading}
+            startTime={startTime}
+            endTime={endTime}
+            favorites={favoritesSet}
             onToggleFavorite={handleToggleFavorite}
             canFavorite={authState.isAuthenticated}
           />

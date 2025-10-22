@@ -4,17 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiBase =
-    env.VITE_API_BASE_URL?.trim().replace(/\/$/, '') ?? ''
-  const proxy = apiBase
-    ? {
-        '/api': {
-          target: apiBase,
-          changeOrigin: true,
-          secure: false,
-        },
-      }
-    : undefined
+  const envBase = env.VITE_API_BASE_URL?.trim()
+  const fallbackBase = 'http://api-cs5224-app.wanioco.com'
+  const baseUrl = (envBase && envBase.length > 0 ? envBase : fallbackBase).replace(/\/$/, '')
 
   return {
     plugins: [
@@ -24,10 +16,14 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-    server: proxy
-      ? {
-          proxy,
-        }
-      : undefined,
+    server: {
+      proxy: {
+        '/api': {
+          target: baseUrl,
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
   }
 })

@@ -1,10 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type {
-  CarparkAvailabilityLot,
-  CarparkAvailabilityResponse,
-  CarparkOccupancy,
-} from '../types/carpark';
+import type { CarparkOccupancy } from '../types/carpark';
+
+type CarparkAvailabilityLot = {
+  total: number;
+  type: string;
+  available: number;
+};
+
+type CarparkAvailabilityResponse = {
+  success: boolean;
+  code: string;
+  message: string;
+  data: Array<{
+    id: string;
+    lots: CarparkAvailabilityLot[];
+  }>;
+};
 
 type UseCarparkAvailabilityOptions = {
   parkingStartTime: string;
