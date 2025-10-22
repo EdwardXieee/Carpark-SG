@@ -130,6 +130,7 @@ function App() {
         console.error('Failed to fetch carpark details:', error);
         const fallbackCarpark: NearbyCarpark = {
           ...carparkLocation,
+          address: 'Address not available',
           distanceKm: anchor ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude) : 0,
           totalLots: null,
           availableLots: null,

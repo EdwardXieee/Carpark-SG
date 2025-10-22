@@ -1,5 +1,5 @@
 import { List, ListItem, ListItemText, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton, Button, CircularProgress, Divider, ListItemButton } from '@mui/material';
-import { Close as CloseIcon, DirectionsCar as DirectionsCarIcon, AttachMoney as AttachMoneyIcon, NearMe as NearMeIcon } from '@mui/icons-material';
+import { Close as CloseIcon, DirectionsCar as DirectionsCarIcon, NearMe as NearMeIcon } from '@mui/icons-material';
 
 import type { NearbyCarpark } from '../types/carpark';
 
@@ -97,9 +97,9 @@ export function CarparkSidebar({
     const walkingMinutes = Math.round(displayDetails.distanceKm * 12);
 
     return (
-      <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexShrink: 0 }}>
+        <Box sx={{ px: 2, pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexShrink: 0 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
               {displayDetails.id}
@@ -114,13 +114,23 @@ export function CarparkSidebar({
         </Box>
 
         {/* Scrollable Content */}
-        <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
+        <Box sx={{ px: 2, pb: 2, overflowY: 'auto', flexGrow: 1 }}>
           {/* Quick Info */}
           <Box sx={{ mb: 2 }}>
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="caption" color="text.secondary">Estimated Fee</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                {`$${displayDetails.estimatedFee.toFixed(2)}`}<Typography component="span" variant="body2" color="text.secondary">{` / ${durationHours.toFixed(1)} hr`}</Typography>
+                {displayDetails.estimatedFee !== null
+                  ? (
+                    <>
+                      {`$${displayDetails.estimatedFee.toFixed(2)}`}
+                      <Typography component="span" variant="body2" color="text.secondary">
+                        {` / ${durationHours.toFixed(1)} hr`}
+                      </Typography>
+                    </>
+                  )
+                  : 'N/A'
+                }
               </Typography>
             </Box>
             <Box>
@@ -231,7 +241,7 @@ export function CarparkSidebar({
         </Box>
       )}
 
-      <List disablePadding sx={{ px: 2, height: '100%' }}>
+      <List disablePadding sx={{ px: focusedCarparkId ? 0 : 2, height: '100%' }}>
         {focusedCarparkId ? renderDetailView() : renderListView()}
       </List>
     </Box>
