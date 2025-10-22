@@ -25,9 +25,9 @@ export const useCarparkLocations = () => {
           });
 
         setCarparks(carparkData);
-        console.log(`加载了 ${carparkData.length} 个停车场数据`);
+        console.log(`Loaded ${carparkData.length} car park records`);
       } catch (error) {
-        console.error('加载停车场数据失败:', error);
+        console.error('Failed to load car park data:', error);
       }
     };
 

@@ -20,7 +20,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // 定义搜索函数
+  // Define search function that queries Nominatim
   const fetchResults = async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -43,13 +43,13 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
     }
   };
 
-  // 用 useMemo 创建防抖函数（避免每次输入都触发）
+  // Create debounced search function so we do not query on every keystroke
   const debouncedSearch = useMemo(
     () => debounce((val: string) => fetchResults(val), 500),
     []
   );
 
-  // 输入时调用防抖搜索
+  // Trigger debounced search whenever the input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInputValue(val);
@@ -113,7 +113,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
         </Fab>
       </div>
 
-      {/* 搜索结果下拉 */}
+      {/* Search result dropdown */}
       {searchResults.length > 0 && (
         <Paper
           elevation={3}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
 import type { CarparkLocation, NearbyCarpark } from '../types/carpark';
 import { getDistanceInKm } from '../utils/geo';
 
@@ -13,6 +14,26 @@ const formatDate = (date: Date) => {
   const minutes = pad(date.getMinutes());
   const seconds = pad(date.getSeconds());
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+
+const computeOccupancyRatio = (available: number | null, total: number | null) => {
+  if (available === null || total === null || total === 0) {
+    return null;
+  }
+  return available / total;
+};
+
+const computeCongestionLevel = (ratio: number | null) => {
+  if (ratio === null) {
+    return 'unknown';
+  }
+  if (ratio >= 0.6) {
+    return 'low';
+  }
+  if (ratio >= 0.3) {
+    return 'medium';
+  }
+  return 'high';
 };
 
 export const useNearbyCarparks = (
@@ -31,6 +52,8 @@ export const useNearbyCarparks = (
       setNearbyCarparks([]);
       return;
     }
+
+    const controller = new AbortController();
 
     const fetchCarparkDetails = async () => {
       setLoading(true);
@@ -61,40 +84,75 @@ export const useNearbyCarparks = (
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           }),
           fetch('/api/car-park/query/parking-rate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           }),
         ]);
+
+        if (!lotsResponse.ok || !ratesResponse.ok) {
+          throw new Error('Failed to fetch nearby carpark data');
+        }
 
         const lotsData = await lotsResponse.json();
         const ratesData = await ratesResponse.json();
 
-        const combinedData = nearbyCarparkLocations.map((carpark) => {
+        const combinedData: NearbyCarpark[] = nearbyCarparkLocations.map((carpark) => {
           const lotsInfo = lotsData.data?.find((d: any) => d.id === carpark.id);
           const ratesInfo = ratesData.data?.find((d: any) => d.id === carpark.id);
 
+          const availableLots = lotsInfo?.lots?.[0]?.available ?? null;
+          const totalLots = lotsInfo?.lots?.[0]?.total ?? null;
+          const occupancyRatio = computeOccupancyRatio(availableLots, totalLots);
+
           return {
-            ...carpark,
-            totalLots: lotsInfo?.lots[0]?.total ?? null,
-            availableLots: lotsInfo?.lots[0]?.available ?? null,
-            estimatedFee: ratesInfo?.rates[0]?.estimatedFee ?? null,
+            id: carpark.id,
+            address: ratesInfo?.address ?? 'Address not available',
+            latitude: carpark.latitude,
+            longitude: carpark.longitude,
+            distanceKm: carpark.distanceKm ?? 0,
+            totalLots,
+            availableLots,
+            estimatedFee: ratesInfo?.rates?.[0]?.estimatedFee ?? null,
+            lotType: ratesInfo?.type,
+            agency: ratesInfo?.agency,
+            type: ratesInfo?.type,
+            parkingSystemType: ratesInfo?.parkingSystemType,
+            shortTermParkingPeriod: ratesInfo?.shortTermParkingPeriod,
+            freeParkingPeriod: ratesInfo?.freeParkingPeriod,
+            nightParkingFlag: ratesInfo?.nightParkingFlag,
+            basementFlag: ratesInfo?.basementFlag,
+            deckCount: ratesInfo?.deckCount,
+            gantryHeight: ratesInfo?.gantryHeight,
+            occupancyRatio,
+            congestionLevel: computeCongestionLevel(occupancyRatio),
           };
         });
 
         setNearbyCarparks(combinedData);
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error('Failed to fetch carpark details:', error);
         setNearbyCarparks([]);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchCarparkDetails();
+
+    return () => controller.abort();
   }, [anchor, carparks, radiusKm, startTime, endTime, lotType]);
 
-  return { nearbyCarparks, loading };
+  const decoratedCarparks = useMemo(() => nearbyCarparks, [nearbyCarparks]);
+
+  return { nearbyCarparks: decoratedCarparks, loading };
 };

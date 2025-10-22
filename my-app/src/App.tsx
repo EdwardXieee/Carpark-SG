@@ -1,21 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, AppBar, Toolbar, Typography, ThemeProvider, createTheme } from '@mui/material';
+import {
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  ThemeProvider,
+  createTheme,
+  Button,
+  Avatar,
+  Tooltip,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+} from '@mui/material';
+import {
+  Logout as LogoutIcon,
+  Favorite as FavoriteIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+} from '@mui/icons-material';
 import type { Map as LeafletMap } from 'leaflet';
 
 import SearchBox from './components/SearchBox';
 import { CarparkMap } from './components/CarparkMap';
 import { CarparkSidebar } from './components/CarparkSidebar';
+import { LoginDialog } from './components/LoginDialog';
 import './App.css';
 
+import { useCarparkAvailability } from './hooks/useCarparkAvailability';
 import { useCarparkLocations } from './hooks/useCarparkLocations';
 import { useNearbyCarparks } from './hooks/useNearbyCarparks';
-import type { NearbyCarpark } from './types/carpark';
+import type { CarparkOccupancy, NearbyCarpark } from './types/carpark';
 import { TimeSelection } from './components/TimeSelection';
 import { getDistanceInKm } from './utils/geo';
 import VehicleTypeSelection from './components/VehicleTypeSelection';
-
-type Anchor = { lat: number; lon: number } | null;
-type SortBy = 'distance' | 'price' | 'availability';
 
 const theme = createTheme({
   palette: {
@@ -41,10 +61,45 @@ const formatDate = (date: Date) => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 };
 
+const computeCongestionLevel = (ratio: number | null) => {
+  if (ratio === null) {
+    return 'unknown';
+  }
+  if (ratio >= 0.6) return 'low';
+  if (ratio >= 0.3) return 'medium';
+  return 'high';
+};
+
+const computeOccupancyRatio = (available: number | null, total: number | null) => {
+  if (available === null || total === null || total === 0) {
+    return null;
+  }
+  return available / total;
+};
+
+type Anchor = { lat: number; lon: number } | null;
+type SortBy = 'distance' | 'price' | 'availability';
+type AuthState = {
+  isAuthenticated: boolean;
+  email: string | null;
+  appToken: string | null;
+  googleToken: string | null;
+};
+
 function App() {
   const [sortBy, setSortBy] = useState<SortBy>('distance');
   const [mapCenter, setMapCenter] = useState<[number, number]>([1.2949927, 103.7733938]);
   const mapRef = useRef<LeafletMap | null>(null);
+  const [authState, setAuthState] = useState<AuthState>({
+    isAuthenticated: false,
+    email: null,
+    appToken: null,
+    googleToken: null,
+  });
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
+  const [favoritesMenuAnchor, setFavoritesMenuAnchor] = useState<null | HTMLElement>(null);
 
   const [selectedLocation, setSelectedLocation] = useState<Anchor>(null);
   const [currentLocation, setCurrentLocation] = useState<Anchor>(null);
@@ -59,7 +114,74 @@ function App() {
   }, []);
 
   const carparks = useCarparkLocations();
-  const { nearbyCarparks, loading: nearbyLoading } = useNearbyCarparks(carparks, anchor, startTime, endTime, vehicleType);
+  const carparkIds = useMemo(() => carparks.map((carpark) => carpark.id), [carparks]);
+
+  const { nearbyCarparks, loading: nearbyLoading } = useNearbyCarparks(
+    carparks,
+    anchor,
+    startTime,
+    endTime,
+    vehicleType,
+  );
+
+  const {
+    availability,
+    loading: availabilityLoading,
+    error: availabilityError,
+    refetch: refetchAvailability,
+  } = useCarparkAvailability(carparkIds, {
+    parkingStartTime: formatDate(startTime),
+    parkingEndTime: formatDate(endTime),
+    lotType: vehicleType,
+    enabled: carparkIds.length > 0,
+  });
+
+  const decoratedNearbyCarparks = useMemo(() =>
+    nearbyCarparks.map((carpark) => {
+      const occupancyRatio = computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null);
+      return {
+        ...carpark,
+        occupancyRatio,
+        congestionLevel: computeCongestionLevel(occupancyRatio),
+      } as NearbyCarpark;
+    }),
+  [nearbyCarparks]);
+
+  const availabilityMap = useMemo(() => {
+    const map: Record<string, CarparkOccupancy> = { ...availability };
+
+    decoratedNearbyCarparks.forEach((carpark) => {
+      map[carpark.id] = {
+        availableLots: carpark.availableLots ?? null,
+        totalLots: carpark.totalLots ?? null,
+        lotType: carpark.lotType ?? null,
+        occupancyRatio: carpark.occupancyRatio ?? computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null),
+        congestionLevel: carpark.congestionLevel ?? computeCongestionLevel(computeOccupancyRatio(carpark.availableLots ?? null, carpark.totalLots ?? null)),
+      };
+    });
+
+    return map;
+  }, [availability, decoratedNearbyCarparks]);
+
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.email) {
+      const stored = localStorage.getItem(`favorites:${authState.email}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setFavoriteIds(parsed);
+          }
+        } catch (error) {
+          console.warn('Failed to parse stored favourites', error);
+        }
+      } else {
+        setFavoriteIds([]);
+      }
+    } else {
+      setFavoriteIds([]);
+    }
+  }, [authState]);
 
   const [focusedCarparkId, setFocusedCarparkId] = useState<string | null>(null);
   const [focusedCarpark, setFocusedCarpark] = useState<NearbyCarpark | null>(null);
@@ -76,8 +198,10 @@ function App() {
       return;
     }
 
+    const controller = new AbortController();
+
     const fetchDetails = async () => {
-      setFocusedCarpark(null); // Show loading state
+      setFocusedCarpark(null);
       try {
         const requestBody = {
           parkingStartTime: formatDate(startTime),
@@ -91,18 +215,25 @@ function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           }),
           fetch('/api/car-park/query/parking-rate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           }),
           fetch('/api/car-park/query/info', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           }),
         ]);
+
+        if (!lotsResponse.ok || !ratesResponse.ok || !infoResponse.ok) {
+          throw new Error('Failed to fetch carpark details');
+        }
 
         const lotsData = await lotsResponse.json();
         const ratesData = await ratesResponse.json();
@@ -112,39 +243,98 @@ function App() {
         const ratesInfo = ratesData.data?.find((d: any) => d.id === focusedCarparkId);
         const info = infoData.data?.[0];
 
+        const availableLots = lotsInfo?.lots?.[0]?.available ?? null;
+        const totalLots = lotsInfo?.lots?.[0]?.total ?? null;
+        const occupancyRatio = computeOccupancyRatio(availableLots, totalLots);
         const distanceKm = anchor
           ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude)
           : 0;
 
         const detailedCarpark: NearbyCarpark = {
-          ...carparkLocation,
+          id: carparkLocation.id,
+          address: info?.address ?? 'Address not available',
+          latitude: carparkLocation.latitude,
+          longitude: carparkLocation.longitude,
           distanceKm,
-          totalLots: lotsInfo?.lots[0]?.total ?? null,
-          availableLots: lotsInfo?.lots[0]?.available ?? null,
-          estimatedFee: ratesInfo?.rates[0]?.estimatedFee ?? null,
-          ...info,
+          totalLots,
+          availableLots,
+          estimatedFee: ratesInfo?.rates?.[0]?.estimatedFee ?? null,
+          lotType: ratesInfo?.type,
+          agency: info?.agency ?? ratesInfo?.agency,
+          type: info?.type,
+          parkingSystemType: info?.parkingSystemType ?? ratesInfo?.parkingSystemType,
+          shortTermParkingPeriod: info?.shortTermParkingPeriod ?? ratesInfo?.shortTermParkingPeriod,
+          freeParkingPeriod: info?.freeParkingPeriod ?? ratesInfo?.freeParkingPeriod,
+          nightParkingFlag: info?.nightParkingFlag ?? ratesInfo?.nightParkingFlag,
+          basementFlag: info?.basementFlag ?? ratesInfo?.basementFlag,
+          deckCount: info?.deckCount ?? ratesInfo?.deckCount,
+          gantryHeight: info?.gantryHeight ?? ratesInfo?.gantryHeight,
+          occupancyRatio,
+          congestionLevel: computeCongestionLevel(occupancyRatio),
         };
 
         setFocusedCarpark(detailedCarpark);
       } catch (error) {
-        console.error('Failed to fetch carpark details:', error);
-        const fallbackCarpark: NearbyCarpark = {
-          ...carparkLocation,
-          address: 'Address not available',
-          distanceKm: anchor ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude) : 0,
-          totalLots: null,
-          availableLots: null,
-          estimatedFee: null,
-        };
-        setFocusedCarpark(fallbackCarpark);
+        if (!controller.signal.aborted) {
+          console.error('Failed to fetch carpark details:', error);
+          const distanceKm = anchor
+            ? getDistanceInKm(anchor.lat, anchor.lon, carparkLocation.latitude, carparkLocation.longitude)
+            : 0;
+          setFocusedCarpark({
+            id: carparkLocation.id,
+            address: 'Address not available',
+            latitude: carparkLocation.latitude,
+            longitude: carparkLocation.longitude,
+            distanceKm,
+            totalLots: null,
+            availableLots: null,
+            estimatedFee: null,
+            occupancyRatio: null,
+            congestionLevel: 'unknown',
+          });
+        }
       }
     };
 
     fetchDetails();
+
+    return () => controller.abort();
   }, [focusedCarparkId, carparks, anchor, startTime, endTime, vehicleType]);
 
+  const favoriteCarparkDetails = useMemo(() => {
+    return favoriteIds
+      .map((id) => {
+        const location = carparks.find((item) => item.id === id);
+        if (!location) {
+          return null;
+        }
+
+        const occupancy = availabilityMap[id];
+        const availableLots = occupancy?.availableLots ?? null;
+        const totalLots = occupancy?.totalLots ?? null;
+        const occupancyRatio = occupancy?.occupancyRatio ?? computeOccupancyRatio(availableLots, totalLots);
+        const distanceKm = anchor
+          ? getDistanceInKm(anchor.lat, anchor.lon, location.latitude, location.longitude)
+          : getDistanceInKm(mapCenter[0], mapCenter[1], location.latitude, location.longitude);
+
+        return {
+          id,
+          address: 'Address not available',
+          latitude: location.latitude,
+          longitude: location.longitude,
+          distanceKm,
+          totalLots,
+          availableLots,
+          estimatedFee: null,
+          occupancyRatio,
+          congestionLevel: computeCongestionLevel(occupancyRatio),
+        } as NearbyCarpark;
+      })
+      .filter((item): item is NearbyCarpark => item !== null);
+  }, [favoriteIds, carparks, availabilityMap, anchor, mapCenter]);
+
   const sortedNearbyCarparks = useMemo(() => {
-    const sorted = [...nearbyCarparks];
+    const sorted = [...decoratedNearbyCarparks];
     if (sortBy === 'price') {
       return sorted.sort((a, b) => (a.estimatedFee ?? Infinity) - (b.estimatedFee ?? Infinity));
     }
@@ -152,11 +342,11 @@ function App() {
       return sorted.sort((a, b) => (b.availableLots ?? -1) - (a.availableLots ?? -1));
     }
     return sorted.sort((a, b) => a.distanceKm - b.distanceKm);
-  }, [nearbyCarparks, sortBy]);
+  }, [decoratedNearbyCarparks, sortBy]);
 
   const nearbyCarparkIds = useMemo(
-    () => new Set(nearbyCarparks.map((carpark) => carpark.id)),
-    [nearbyCarparks],
+    () => new Set(decoratedNearbyCarparks.map((carpark) => carpark.id)),
+    [decoratedNearbyCarparks],
   );
 
   const handleSortChange = (
@@ -235,6 +425,77 @@ function App() {
     panTo(result.lat, result.lon, 15);
   };
 
+  const handleLoginSuccess = (params: { email: string; appToken: string; googleToken: string }) => {
+    setAuthState({
+      isAuthenticated: true,
+      email: params.email,
+      appToken: params.appToken,
+      googleToken: params.googleToken,
+    });
+
+    localStorage.setItem('auth:lastEmail', params.email);
+  };
+
+  const handleLogout = () => {
+    setAuthState({
+      isAuthenticated: false,
+      email: null,
+      appToken: null,
+      googleToken: null,
+    });
+    setFavoriteIds([]);
+    setProfileMenuAnchor(null);
+    setFavoritesMenuAnchor(null);
+  };
+
+  const handleToggleFavorite = (carparkId: string) => {
+    if (!authState.isAuthenticated || !authState.email) {
+      setLoginDialogOpen(true);
+      return;
+    }
+
+    setFavoriteIds((prev) => {
+      let next: string[];
+      if (prev.includes(carparkId)) {
+        next = prev.filter((id) => id !== carparkId);
+      } else {
+        next = [...prev, carparkId];
+      }
+
+      localStorage.setItem(`favorites:${authState.email}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const openProfileMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setProfileMenuAnchor(event.currentTarget);
+  };
+
+  const closeProfileMenu = () => {
+    setProfileMenuAnchor(null);
+  };
+
+  const openFavoritesMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!authState.isAuthenticated) {
+      setLoginDialogOpen(true);
+      return;
+    }
+    setFavoritesMenuAnchor(event.currentTarget);
+  };
+
+  const closeFavoritesMenu = () => {
+    setFavoritesMenuAnchor(null);
+  };
+
+  const handleFavoriteSelect = (carpark: NearbyCarpark) => {
+    closeFavoritesMenu();
+    setFocusedCarparkId(carpark.id);
+    panTo(carpark.latitude, carpark.longitude, 17);
+  };
+
+  const hasFavorites = favoriteCarparkDetails.length > 0;
+  const favoritesSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
@@ -243,19 +504,131 @@ function App() {
             <Typography variant="h6" sx={{ flexGrow: 1, color: 'white', fontWeight: 'bold' }}>
               SG Car Park Finder+
             </Typography>
+            <Tooltip
+              title={authState.isAuthenticated
+                ? hasFavorites
+                  ? 'View bookmarked car parks'
+                  : 'No bookmarked car parks yet'
+                : 'Sign in to manage bookmarks'}
+            >
+              <IconButton
+                color="inherit"
+                onClick={openFavoritesMenu}
+                size="small"
+                sx={{ ml: 1 }}
+              >
+                {authState.isAuthenticated && hasFavorites ? (
+                  <FavoriteIcon color="error" fontSize="small" />
+                ) : (
+                  <FavoriteBorderIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+            {authState.isAuthenticated ? (
+              <>
+                <Tooltip title={authState.email ?? 'Profile'}>
+                  <IconButton
+                    color="inherit"
+                    onClick={openProfileMenu}
+                    size="small"
+                    sx={{ ml: 1 }}
+                  >
+                    <Avatar sx={{ bgcolor: '#2e7d32', width: 32, height: 32 }}>
+                      {authState.email?.charAt(0).toUpperCase() ?? '?'}
+                    </Avatar>
+                  </IconButton>
+                </Tooltip>
+                <Menu
+                  anchorEl={profileMenuAnchor}
+                  open={Boolean(profileMenuAnchor)}
+                  onClose={closeProfileMenu}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                >
+                  <MenuItem disabled>
+                    <ListItemText primary={authState.email ?? ''} secondary="Signed in" />
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem onClick={handleLogout}>
+                    <ListItemIcon>
+                      <LogoutIcon fontSize="small" />
+                    </ListItemIcon>
+                    Sign out
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <Button
+                color="inherit"
+                variant="outlined"
+                onClick={() => setLoginDialogOpen(true)}
+              >
+                Sign in
+              </Button>
+            )}
+            <Menu
+              anchorEl={favoritesMenuAnchor}
+              open={Boolean(favoritesMenuAnchor)}
+              onClose={closeFavoritesMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              {!authState.isAuthenticated ? (
+                <MenuItem disabled>
+                  <ListItemIcon>
+                    <FavoriteBorderIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Sign in to manage bookmarks" />
+                </MenuItem>
+              ) : favoriteCarparkDetails.length === 0 ? (
+                <MenuItem disabled>
+                  <ListItemIcon>
+                    <FavoriteBorderIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="No bookmarked car parks yet" />
+                </MenuItem>
+              ) : (
+                favoriteCarparkDetails.map((item) => (
+                  <MenuItem
+                    key={item.id}
+                    onClick={() => handleFavoriteSelect(item)}
+                  >
+                    <ListItemIcon>
+                      <FavoriteIcon fontSize="small" color="error" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.id}
+                      secondary={(() => {
+                        const available = item.availableLots ?? null;
+                        const total = item.totalLots ?? null;
+                        const ratio = item.occupancyRatio ?? computeOccupancyRatio(available, total);
+                        if (available !== null && total !== null) {
+                          const suffix = ratio !== null ? ` • Vacancy ${(ratio * 100).toFixed(0)}%` : '';
+                          return `${available}/${total} lots${suffix}`;
+                        }
+                        if (available !== null) {
+                          return `${available} lots`;
+                        }
+                        return 'No live data';
+                      })()}
+                    />
+                  </MenuItem>
+                ))
+              )}
+            </Menu>
           </Toolbar>
         </AppBar>
 
         <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
           <Box sx={{ position: 'relative', flexGrow: 1, height: '100%' }}>
-            <Box sx={{ 
-                position: 'absolute', top: 10, left: 10, zIndex: 1000, 
-                p: 2, bgcolor: 'rgba(255, 255, 255, 0.9)', borderRadius: 2, boxShadow: 3, 
+            <Box sx={{
+                position: 'absolute', top: 10, left: 10, zIndex: 1000,
+                p: 2, bgcolor: 'rgba(255, 255, 255, 0.9)', borderRadius: 2, boxShadow: 3,
                 display: 'flex', flexDirection: 'column', gap: 2,
                 width: 500
               }}>
-              <SearchBox 
-                onSelectResult={handleSearchSelect} 
+              <SearchBox
+                onSelectResult={handleSearchSelect}
                 middleContent={<VehicleTypeSelection vehicleType={vehicleType} setVehicleType={setVehicleType} />}
                 onSearchClick={handleSearch}
               />
@@ -265,6 +638,19 @@ function App() {
                 onStartTimeChange={setStartTime}
                 onEndTimeChange={setEndTime}
               />
+              {availabilityError && (
+                <Typography variant="caption" color="error">
+                  Unable to load live availability: {availabilityError}
+                </Typography>
+              )}
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => { void refetchAvailability(); }}
+                disabled={availabilityLoading}
+              >
+                {availabilityLoading ? 'Refreshing…' : 'Refresh availability'}
+              </Button>
             </Box>
 
             <CarparkMap
@@ -273,6 +659,7 @@ function App() {
               carparks={carparks}
               nearbyCarparkIds={nearbyCarparkIds}
               focusedCarparkId={focusedCarparkId}
+              availability={availabilityMap}
               onMarkerSelect={(carpark) => handleMarkerSelect(carpark.id, carpark.latitude, carpark.longitude)}
               onLocated={handleLocate}
               mapRef={mapRef}
@@ -284,15 +671,24 @@ function App() {
             onSortChange={handleSortChange}
             nearbyCarparks={sortedNearbyCarparks}
             focusedCarpark={focusedCarpark}
+            focusedCarparkId={focusedCarparkId}
             onSelectCarpark={handleListItemSelect}
             onCloseDetails={handleCloseDetails}
             anchor={anchor}
             isLoading={nearbyLoading}
-            focusedCarparkId={focusedCarparkId}
             startTime={startTime}
             endTime={endTime}
+            favorites={favoritesSet}
+            onToggleFavorite={handleToggleFavorite}
+            canFavorite={authState.isAuthenticated}
           />
         </Box>
+
+        <LoginDialog
+          open={loginDialogOpen}
+          onClose={() => setLoginDialogOpen(false)}
+          onSuccess={handleLoginSuccess}
+        />
       </Box>
     </ThemeProvider>
   );

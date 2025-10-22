@@ -1,5 +1,27 @@
-import { List, ListItem, ListItemText, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton, Button, CircularProgress, Divider, ListItemButton } from '@mui/material';
-import { Close as CloseIcon, DirectionsCar as DirectionsCarIcon, NearMe as NearMeIcon } from '@mui/icons-material';
+import {
+  List,
+  ListItem,
+  Card,
+  CardContent,
+  Box,
+  Typography,
+  ToggleButtonGroup,
+  ToggleButton,
+  IconButton,
+  Button,
+  CircularProgress,
+  Divider,
+  ListItemButton,
+  ListItemText,
+  Tooltip,
+} from '@mui/material';
+import {
+  Close as CloseIcon,
+  DirectionsCar as DirectionsCarIcon,
+  NearMe as NearMeIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+  Favorite as FavoriteIcon,
+} from '@mui/icons-material';
 
 import type { NearbyCarpark } from '../types/carpark';
 
@@ -17,6 +39,9 @@ type CarparkSidebarProps = {
   isLoading: boolean;
   startTime: Date;
   endTime: Date;
+  favorites: Set<string>;
+  onToggleFavorite: (carparkId: string) => void;
+  canFavorite: boolean;
 };
 
 const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -33,6 +58,18 @@ const DetailItem = ({ label, value }: { label: string; value: React.ReactNode })
   </>
 );
 
+const getAvailabilityColor = (available: number | null, total: number | null) => {
+  if (available === null || total === null || total === 0) {
+    return 'text.secondary';
+  }
+  const ratio = available / total;
+  if (ratio < 0.1) return 'error.main';
+  if (ratio < 0.3) return 'warning.main';
+  return 'success.main';
+};
+
+const getWalkingMinutes = (distanceKm: number) => Math.round(distanceKm * 12);
+
 export function CarparkSidebar({
   sortBy,
   onSortChange,
@@ -45,8 +82,10 @@ export function CarparkSidebar({
   isLoading,
   startTime,
   endTime,
+  favorites,
+  onToggleFavorite,
+  canFavorite,
 }: CarparkSidebarProps) {
-
   const buildDirectionsUrl = (lat: number, lon: number) => {
     const searchParams = new URLSearchParams({ api: '1', destination: `${lat},${lon}` });
     if (anchor) {
@@ -55,17 +94,31 @@ export function CarparkSidebar({
     return `https://www.google.com/maps/dir/?${searchParams.toString()}`;
   };
 
-  const getAvailabilityColor = (available: number | null, total: number | null) => {
-    if (available === null || total === null || total === 0) {
-      return 'text.secondary';
-    }
-    const ratio = available / total;
-    if (ratio < 0.1) return 'error.main';
-    if (ratio < 0.3) return 'warning.main';
-    return 'success.main';
-  };
-
   const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+
+  const renderFavoriteButton = (carparkId: string, size: 'small' | 'medium' = 'small') => {
+    const isFavorited = favorites.has(carparkId);
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onToggleFavorite(carparkId);
+    };
+
+    return (
+      <Tooltip title={canFavorite ? (isFavorited ? 'Remove bookmark' : 'Bookmark') : 'Sign in to bookmark'}>
+        <span>
+          <IconButton
+            size={size}
+            onClick={handleClick}
+            disabled={!canFavorite}
+            color={isFavorited ? 'error' : 'default'}
+          >
+            {isFavorited ? <FavoriteIcon fontSize={size} /> : <FavoriteBorderIcon fontSize={size} />}
+          </IconButton>
+        </span>
+      </Tooltip>
+    );
+  };
 
   const renderDetailView = () => {
     if (!focusedCarpark) {
@@ -76,54 +129,41 @@ export function CarparkSidebar({
       );
     }
 
-    const mockDetails = {
-      id: 'CLTR',
-      type: 'CAR PARK',
-      estimatedFee: 1.20,
-      availableLots: 581,
-      totalLots: 743,
-      distanceKm: 0.108,
-      agency: 'HDB',
-      parkingSystemType: 'ELECTRONIC PARKING',
-      shortTermParkingPeriod: 'WHOLE DAY',
-      freeParkingPeriod: 'NO',
-      nightParkingFlag: 1,
-      basementFlag: 0,
-      deckCount: 5,
-      gantryHeight: 2.1,
-    };
-
-    const displayDetails = { ...mockDetails, ...focusedCarpark };
-    const walkingMinutes = Math.round(displayDetails.distanceKm * 12);
+    const walkingMinutes = getWalkingMinutes(focusedCarpark.distanceKm);
 
     return (
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Header */}
-        <Box sx={{ px: 2, pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexShrink: 0 }}>
+        <Box sx={{ px: 2, pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
-              {displayDetails.id}
+              {focusedCarpark.id}
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 'medium' }}>
-              {displayDetails.type} &middot; <Box component="span" sx={{ color: getAvailabilityColor(displayDetails.availableLots, displayDetails.totalLots), fontWeight: 'bold' }}>{`${displayDetails.availableLots} / ${displayDetails.totalLots}`}</Box>
+              <Box
+                component="span"
+                sx={{ color: getAvailabilityColor(focusedCarpark.availableLots, focusedCarpark.totalLots), fontWeight: 'bold' }}
+              >
+                {focusedCarpark.availableLots ?? '-'} / {focusedCarpark.totalLots ?? '-'}
+              </Box>
             </Typography>
           </Box>
-          <IconButton size="small" onClick={onCloseDetails} aria-label="Close Details">
-            <CloseIcon fontSize="small" />
-          </IconButton>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {renderFavoriteButton(focusedCarpark.id, 'medium')}
+            <IconButton size="small" onClick={onCloseDetails} aria-label="Close details">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
 
-        {/* Scrollable Content */}
         <Box sx={{ px: 2, pb: 2, overflowY: 'auto', flexGrow: 1 }}>
-          {/* Quick Info */}
           <Box sx={{ mb: 2 }}>
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="caption" color="text.secondary">Estimated Fee</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                {displayDetails.estimatedFee !== null
+                {focusedCarpark.estimatedFee !== null
                   ? (
                     <>
-                      {`$${displayDetails.estimatedFee.toFixed(2)}`}
+                      {`$${focusedCarpark.estimatedFee.toFixed(2)}`}
                       <Typography component="span" variant="body2" color="text.secondary">
                         {` / ${durationHours.toFixed(1)} hr`}
                       </Typography>
@@ -136,36 +176,37 @@ export function CarparkSidebar({
             <Box>
               <Typography variant="caption" color="text.secondary">Distance</Typography>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                {`${Math.round(displayDetails.distanceKm * 1000)} m `}<Typography component="span" variant="body2" color="text.secondary">{`(${walkingMinutes} min walk)`}</Typography>
+                {`${Math.round(focusedCarpark.distanceKm * 1000)} m `}
+                <Typography component="span" variant="body2" color="text.secondary">
+                  {`(${walkingMinutes} min walk)`}
+                </Typography>
               </Typography>
             </Box>
           </Box>
 
-          {/* Action Button */}
-          <Button 
-            variant="contained" 
-            color="primary" 
-            fullWidth 
+          <Button
+            variant="contained"
+            color="primary"
+            fullWidth
             sx={{ mb: 2, fontWeight: 'bold' }}
-            href={buildDirectionsUrl(displayDetails.latitude, displayDetails.longitude)}
+            href={buildDirectionsUrl(focusedCarpark.latitude, focusedCarpark.longitude)}
             target="_blank"
             rel="noopener noreferrer"
           >
-            GO HERE
+            Go Here
           </Button>
 
-          {/* Details List */}
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Parking Information</Typography>
           <Divider sx={{ mb: 1 }} />
           <List dense>
-            <DetailItem label="Agency" value={displayDetails.agency} />
-            <DetailItem label="Parking System" value={displayDetails.parkingSystemType} />
-            <DetailItem label="Short-term Parking" value={displayDetails.shortTermParkingPeriod} />
-            <DetailItem label="Free Parking" value={displayDetails.freeParkingPeriod} />
-            <DetailItem label="Night Parking" value={displayDetails.nightParkingFlag ? 'Yes' : 'No'} />
-            <DetailItem label="Basement Parking" value={displayDetails.basementFlag ? 'Yes' : 'No'} />
-            <DetailItem label="Decks" value={displayDetails.deckCount} />
-            <DetailItem label="Gantry Height" value={`${displayDetails.gantryHeight}m`} />
+            <DetailItem label="Agency" value={focusedCarpark.agency ?? 'N/A'} />
+            <DetailItem label="Parking System" value={focusedCarpark.parkingSystemType ?? 'N/A'} />
+            <DetailItem label="Short-term Parking" value={focusedCarpark.shortTermParkingPeriod ?? 'N/A'} />
+            <DetailItem label="Free Parking" value={focusedCarpark.freeParkingPeriod ?? 'N/A'} />
+            <DetailItem label="Night Parking" value={focusedCarpark.nightParkingFlag ? 'Yes' : 'No'} />
+            <DetailItem label="Basement Parking" value={focusedCarpark.basementFlag ? 'Yes' : 'No'} />
+            <DetailItem label="Decks" value={focusedCarpark.deckCount ?? 'N/A'} />
+            <DetailItem label="Gantry Height" value={focusedCarpark.gantryHeight !== undefined ? `${focusedCarpark.gantryHeight}m` : 'N/A'} />
           </List>
         </Box>
       </Box>
@@ -180,6 +221,7 @@ export function CarparkSidebar({
         </Box>
       );
     }
+
     if (nearbyCarparks.length === 0) {
       return (
         <ListItem>
@@ -193,40 +235,48 @@ export function CarparkSidebar({
         </ListItem>
       );
     }
-    return nearbyCarparks.map((lot) => (
-      <ListItem key={lot.id} disablePadding sx={{ mb: 1 }}>
-        <ListItemButton onClick={() => onSelectCarpark(lot)} sx={{ p: 0 }}>
-          <Card sx={{ width: '100%', bgcolor: '#f1f8e9' }}>
-            <CardContent sx={{ p: 1, '&:last-child': { pb: 1 } }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2e7d32' }} title={lot.address}>
-                  {lot.id}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <NearMeIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                  <Typography variant="body2">{Math.round(lot.distanceKm * 1000)} m</Typography>
+
+    return nearbyCarparks.map((lot) => {
+      const walkingMinutes = getWalkingMinutes(lot.distanceKm);
+      return (
+        <ListItem key={lot.id} disablePadding sx={{ mb: 1 }}>
+          <ListItemButton onClick={() => onSelectCarpark(lot)} sx={{ p: 0 }}>
+            <Card sx={{ width: '100%', bgcolor: '#f1f8e9' }}>
+              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2e7d32' }} title={lot.address}>
+                      {lot.id}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {lot.address}
+                    </Typography>
+                  </Box>
+                  {renderFavoriteButton(lot.id)}
                 </Box>
-              </Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {lot.address}
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <NearMeIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
+                    <Typography variant="body2">{Math.round(lot.distanceKm * 1000)} m</Typography>
+                    <Typography variant="caption" color="text.secondary">({walkingMinutes} min walk)</Typography>
+                  </Box>
+                  <Typography variant="h6" color="text.primary" sx={{ fontWeight: 'bold' }}>
+                    {lot.estimatedFee !== null ? `$${lot.estimatedFee.toFixed(2)} / ${durationHours.toFixed(1)} hr` : 'N/A'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <DirectionsCarIcon sx={{ color: getAvailabilityColor(lot.availableLots, lot.totalLots) }} />
                   <Typography variant="subtitle1" sx={{ color: getAvailabilityColor(lot.availableLots, lot.totalLots), fontWeight: 'bold' }}>
                     {lot.availableLots ?? '-'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">/ {lot.totalLots ?? '-'}</Typography>
                 </Box>
-                <Typography variant="h6" color="text.primary" sx={{ fontWeight: 'bold' }}>
-                  {lot.estimatedFee !== null ? `$${lot.estimatedFee.toFixed(2)} / ${durationHours.toFixed(1)} hr` : 'N/A'}
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </ListItemButton>
-      </ListItem>
-    ));
+              </CardContent>
+            </Card>
+          </ListItemButton>
+        </ListItem>
+      );
+    });
   };
 
   return (

@@ -11,6 +11,14 @@ export type CarparkLocation = {
   longitude: number;
 };
 
+export type CarparkOccupancy = {
+  availableLots: number | null;
+  totalLots: number | null;
+  lotType: string | null;
+  occupancyRatio: number | null;
+  congestionLevel: 'low' | 'medium' | 'high' | 'unknown';
+};
+
 export type NearbyCarpark = {
   id: string;
   address: string;
@@ -30,4 +38,6 @@ export type NearbyCarpark = {
   basementFlag?: number;
   deckCount?: number;
   gantryHeight?: number;
+  occupancyRatio?: number | null;
+  congestionLevel?: 'low' | 'medium' | 'high' | 'unknown';
 };
