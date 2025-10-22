@@ -7,7 +7,6 @@ export type Carpark = {
 
 export type CarparkLocation = {
   id: string;
-  address: string;
   latitude: number;
   longitude: number;
 };

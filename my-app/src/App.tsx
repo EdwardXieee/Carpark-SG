@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, AppBar, Toolbar, Typography, ThemeProvider, createTheme } from '@mui/material';
 import type { Map as LeafletMap } from 'leaflet';
 
-import SearchBox from './SearchBox';
+import SearchBox from './components/SearchBox';
 import { CarparkMap } from './components/CarparkMap';
 import { CarparkSidebar } from './components/CarparkSidebar';
 import './App.css';
@@ -15,7 +15,7 @@ import { getDistanceInKm } from './utils/geo';
 import VehicleTypeSelection from './components/VehicleTypeSelection';
 
 type Anchor = { lat: number; lon: number } | null;
-type SortBy = 'distance' | 'price';
+type SortBy = 'distance' | 'price' | 'availability';
 
 const theme = createTheme({
   palette: {
@@ -147,6 +147,9 @@ function App() {
     if (sortBy === 'price') {
       return sorted.sort((a, b) => (a.estimatedFee ?? Infinity) - (b.estimatedFee ?? Infinity));
     }
+    if (sortBy === 'availability') {
+      return sorted.sort((a, b) => (b.availableLots ?? -1) - (a.availableLots ?? -1));
+    }
     return sorted.sort((a, b) => a.distanceKm - b.distanceKm);
   }, [nearbyCarparks, sortBy]);
 
@@ -245,7 +248,7 @@ function App() {
         <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)' }}>
           <Box sx={{ position: 'relative', flexGrow: 1, height: '100%' }}>
             <Box sx={{ 
-                position: 'absolute', top: 20, left: 20, zIndex: 1000, 
+                position: 'absolute', top: 10, left: 10, zIndex: 1000, 
                 p: 2, bgcolor: 'rgba(255, 255, 255, 0.9)', borderRadius: 2, boxShadow: 3, 
                 display: 'flex', flexDirection: 'column', gap: 2,
                 width: 500
@@ -285,6 +288,8 @@ function App() {
             anchor={anchor}
             isLoading={nearbyLoading}
             focusedCarparkId={focusedCarparkId}
+            startTime={startTime}
+            endTime={endTime}
           />
         </Box>
       </Box>

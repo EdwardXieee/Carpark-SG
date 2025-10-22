@@ -1,9 +1,9 @@
-import { List, ListItem, ListItemButton, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton, Button, CircularProgress } from '@mui/material';
+import { List, ListItem, ListItemText, Card, CardContent, Box, Typography, ToggleButtonGroup, ToggleButton, IconButton, Button, CircularProgress, Divider, ListItemButton } from '@mui/material';
 import { Close as CloseIcon, DirectionsCar as DirectionsCarIcon, AttachMoney as AttachMoneyIcon, NearMe as NearMeIcon } from '@mui/icons-material';
 
 import type { NearbyCarpark } from '../types/carpark';
 
-type SortBy = 'distance' | 'price';
+type SortBy = 'distance' | 'price' | 'availability';
 
 type CarparkSidebarProps = {
   sortBy: SortBy;
@@ -15,7 +15,23 @@ type CarparkSidebarProps = {
   onCloseDetails: () => void;
   anchor: { lat: number; lon: number } | null;
   isLoading: boolean;
+  startTime: Date;
+  endTime: Date;
 };
+
+const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
+  <>
+    <ListItem disablePadding sx={{ py: 0.5 }}>
+      <ListItemText
+        primary={label}
+        secondary={value}
+        primaryTypographyProps={{ variant: 'caption', color: 'text.secondary' }}
+        secondaryTypographyProps={{ variant: 'body1', color: 'text.primary', sx: { fontWeight: 'medium' } }}
+      />
+    </ListItem>
+    <Divider component="li" light />
+  </>
+);
 
 export function CarparkSidebar({
   sortBy,
@@ -27,7 +43,10 @@ export function CarparkSidebar({
   onCloseDetails,
   anchor,
   isLoading,
+  startTime,
+  endTime,
 }: CarparkSidebarProps) {
+
   const buildDirectionsUrl = (lat: number, lon: number) => {
     const searchParams = new URLSearchParams({ api: '1', destination: `${lat},${lon}` });
     if (anchor) {
@@ -46,79 +65,100 @@ export function CarparkSidebar({
     return 'success.main';
   };
 
+  const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+
   const renderDetailView = () => {
     if (!focusedCarpark) {
       return (
-        <ListItem className="parking-item" disablePadding>
-          <Card className="parking-card" sx={{ width: '100%', bgcolor: '#f1f8e9', display: 'flex', justifyContent: 'center', p: 4 }}>
-            <CircularProgress />
-          </Card>
-        </ListItem>
+        <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', pt: 10 }}>
+          <CircularProgress />
+        </Box>
       );
     }
+
+    const mockDetails = {
+      id: 'CLTR',
+      type: 'CAR PARK',
+      estimatedFee: 1.20,
+      availableLots: 581,
+      totalLots: 743,
+      distanceKm: 0.108,
+      agency: 'HDB',
+      parkingSystemType: 'ELECTRONIC PARKING',
+      shortTermParkingPeriod: 'WHOLE DAY',
+      freeParkingPeriod: 'NO',
+      nightParkingFlag: 1,
+      basementFlag: 0,
+      deckCount: 5,
+      gantryHeight: 2.1,
+    };
+
+    const displayDetails = { ...mockDetails, ...focusedCarpark };
+    const walkingMinutes = Math.round(displayDetails.distanceKm * 12);
+
     return (
-      <ListItem className="parking-item" disablePadding>
-        <Card className="parking-card" sx={{ width: '100%', bgcolor: '#f1f8e9' }}>
-          <CardContent sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Box sx={{ maxWidth: '80%' }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2e7d32' }} title={focusedCarpark.address}>
-                  {focusedCarpark.address}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  ID: {focusedCarpark.id}
-                </Typography>
-              </Box>
-              <IconButton size="small" onClick={onCloseDetails} aria-label="关闭详情">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
+      <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, flexShrink: 0 }}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+              {displayDetails.id}
+            </Typography>
+            <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 'medium' }}>
+              {displayDetails.type} &middot; <Box component="span" sx={{ color: getAvailabilityColor(displayDetails.availableLots, displayDetails.totalLots), fontWeight: 'bold' }}>{`${displayDetails.availableLots} / ${displayDetails.totalLots}`}</Box>
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={onCloseDetails} aria-label="Close Details">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Box>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Estimated Fee</Typography>
-                <Typography variant="subtitle1">
-                  {focusedCarpark.estimatedFee !== null ? `$${focusedCarpark.estimatedFee.toFixed(2)}` : 'N/A'}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="caption" color="text.secondary">Availability</Typography>
-                <Typography variant="subtitle1" sx={{ color: getAvailabilityColor(focusedCarpark.availableLots, focusedCarpark.totalLots), fontWeight: 'bold' }}>
-                  {focusedCarpark.availableLots !== null ? `${focusedCarpark.availableLots} / ${focusedCarpark.totalLots}` : 'N/A'}
-                </Typography>
-              </Box>
+        {/* Scrollable Content */}
+        <Box sx={{ overflowY: 'auto', flexGrow: 1 }}>
+          {/* Quick Info */}
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="caption" color="text.secondary">Estimated Fee</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {`$${displayDetails.estimatedFee.toFixed(2)}`}<Typography component="span" variant="body2" color="text.secondary">{` / ${durationHours.toFixed(1)} hr`}</Typography>
+              </Typography>
             </Box>
-
-            <Box sx={{ mt: 1 }}>
+            <Box>
               <Typography variant="caption" color="text.secondary">Distance</Typography>
-              <Typography variant="body1">~{Math.round(focusedCarpark.distanceKm * 1000)} m</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {`${Math.round(displayDetails.distanceKm * 1000)} m `}<Typography component="span" variant="body2" color="text.secondary">{`(${walkingMinutes} min walk)`}</Typography>
+              </Typography>
             </Box>
+          </Box>
 
-            {focusedCarpark.agency && <Typography variant="body2" sx={{ mt: 1 }}>Agency: {focusedCarpark.agency}</Typography>}
-            {focusedCarpark.type && <Typography variant="body2">Type: {focusedCarpark.type}</Typography>}
-            {focusedCarpark.parkingSystemType && <Typography variant="body2">Parking System: {focusedCarpark.parkingSystemType}</Typography>}
-            {focusedCarpark.shortTermParkingPeriod && <Typography variant="body2">Short-term Parking: {focusedCarpark.shortTermParkingPeriod}</Typography>}
-            {focusedCarpark.freeParkingPeriod && <Typography variant="body2">Free Parking: {focusedCarpark.freeParkingPeriod}</Typography>}
-            {focusedCarpark.nightParkingFlag !== undefined && <Typography variant="body2">Night Parking: {focusedCarpark.nightParkingFlag ? 'Yes' : 'No'}</Typography>}
-            {focusedCarpark.basementFlag !== undefined && <Typography variant="body2">Basement Parking: {focusedCarpark.basementFlag ? 'Yes' : 'No'}</Typography>}
-            {focusedCarpark.deckCount !== undefined && <Typography variant="body2">Decks: {focusedCarpark.deckCount}</Typography>}
-            {focusedCarpark.gantryHeight !== undefined && <Typography variant="body2">Gantry Height: {focusedCarpark.gantryHeight}m</Typography>}
+          {/* Action Button */}
+          <Button 
+            variant="contained" 
+            color="primary" 
+            fullWidth 
+            sx={{ mb: 2, fontWeight: 'bold' }}
+            href={buildDirectionsUrl(displayDetails.latitude, displayDetails.longitude)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GO HERE
+          </Button>
 
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                size="small"
-                href={buildDirectionsUrl(focusedCarpark.latitude, focusedCarpark.longitude)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Go Here
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </ListItem>
+          {/* Details List */}
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Parking Information</Typography>
+          <Divider sx={{ mb: 1 }} />
+          <List dense>
+            <DetailItem label="Agency" value={displayDetails.agency} />
+            <DetailItem label="Parking System" value={displayDetails.parkingSystemType} />
+            <DetailItem label="Short-term Parking" value={displayDetails.shortTermParkingPeriod} />
+            <DetailItem label="Free Parking" value={displayDetails.freeParkingPeriod} />
+            <DetailItem label="Night Parking" value={displayDetails.nightParkingFlag ? 'Yes' : 'No'} />
+            <DetailItem label="Basement Parking" value={displayDetails.basementFlag ? 'Yes' : 'No'} />
+            <DetailItem label="Decks" value={displayDetails.deckCount} />
+            <DetailItem label="Gantry Height" value={`${displayDetails.gantryHeight}m`} />
+          </List>
+        </Box>
+      </Box>
     );
   };
 
@@ -168,12 +208,9 @@ export function CarparkSidebar({
                   </Typography>
                   <Typography variant="body2" color="text.secondary">/ {lot.totalLots ?? '-'}</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <AttachMoneyIcon sx={{ color: 'text.secondary' }} />
-                  <Typography variant="h6" color="text.primary" sx={{ fontWeight: 'bold' }}>
-                    {lot.estimatedFee !== null ? lot.estimatedFee.toFixed(2) : 'N/A'}
-                  </Typography>
-                </Box>
+                <Typography variant="h6" color="text.primary" sx={{ fontWeight: 'bold' }}>
+                  {lot.estimatedFee !== null ? `$${lot.estimatedFee.toFixed(2)} / ${durationHours.toFixed(1)} hr` : 'N/A'}
+                </Typography>
               </Box>
             </CardContent>
           </Card>
@@ -183,17 +220,18 @@ export function CarparkSidebar({
   };
 
   return (
-    <Box className="parking-list" sx={{ width: 370, height: '100%', bgcolor: '#e8f5e9', overflowY: 'auto' }}>
+    <Box className="parking-list" sx={{ width: 370, height: '100%', bgcolor: '#e8f5e9' }}>
       {!focusedCarparkId && (
         <Box sx={{ p: 2, bgcolor: '#e8f5e9', position: 'sticky', top: 0, zIndex: 1 }}>
           <ToggleButtonGroup value={sortBy} exclusive onChange={onSortChange} size="small" fullWidth>
             <ToggleButton value="distance">Distance</ToggleButton>
             <ToggleButton value="price">Price</ToggleButton>
+            <ToggleButton value="availability">Availability</ToggleButton>
           </ToggleButtonGroup>
         </Box>
       )}
 
-      <List disablePadding sx={{ px: 2 }}>
+      <List disablePadding sx={{ px: 2, height: '100%' }}>
         {focusedCarparkId ? renderDetailView() : renderListView()}
       </List>
     </Box>

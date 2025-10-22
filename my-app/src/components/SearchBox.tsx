@@ -99,7 +99,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
           sx={{
             ml: 1,
             bgcolor: '#4caf50',
-            width: 70,
+            width: 65,
             height: 40,
             minHeight: 40,
             borderRadius: '50%',
