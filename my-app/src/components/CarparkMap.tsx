@@ -1,5 +1,5 @@
 import { useMemo, type MutableRefObject } from 'react';
-import { MapContainer, TileLayer, Marker, ZoomControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, ZoomControl, useMap, Circle, Popup } from 'react-leaflet';
 import { Fab } from '@mui/material';
 import { MyLocation as MyLocationIcon } from '@mui/icons-material';
 import L from 'leaflet';
@@ -20,6 +20,7 @@ type CarparkMapProps = {
   onMarkerSelect: (carpark: CarparkLocation) => void;
   onLocated: (lat: number, lon: number) => void;
   mapRef: MutableRefObject<L.Map | null>;
+  searchRadiusKm: number;
 };
 
 const createLocationIcon = () =>
@@ -133,8 +134,19 @@ export function CarparkMap({
   onMarkerSelect,
   onLocated,
   mapRef,
+  searchRadiusKm,
 }: CarparkMapProps) {
   const locationIcon = useMemo(() => createLocationIcon(), []);
+  const defaultOccupancy: CarparkOccupancy = useMemo(
+    () => ({
+      availableLots: null,
+      totalLots: null,
+      lotType: null,
+      occupancyRatio: null,
+      congestionLevel: 'unknown',
+    }),
+    [],
+  );
   const markerIcons = useMemo(() => {
     const iconMap = new Map<string, L.DivIcon>();
 
@@ -172,13 +184,20 @@ export function CarparkMap({
       />
 
       {anchor && (
-        <Marker position={[anchor.lat, anchor.lon]} icon={locationIcon} />
+        <>
+          <Marker position={[anchor.lat, anchor.lon]} icon={locationIcon} />
+          <Circle
+            center={[anchor.lat, anchor.lon]}
+            radius={searchRadiusKm * 1000}
+            pathOptions={{ color: '#4caf50', fillColor: '#4caf50', fillOpacity: 0.08, weight: 1 }}
+          />
+        </>
       )}
 
       {carparks.map((carpark) => {
         const isFocused = focusedCarparkId === carpark.id;
         const isNearby = nearbyCarparkIds.has(carpark.id);
-        const occupancy = availability[carpark.id];
+        const occupancy = availability[carpark.id] ?? defaultOccupancy;
         const level: CongestionLevel = occupancy?.congestionLevel ?? 'unknown';
         const state: MarkerState = isFocused ? 'focused' : isNearby ? 'nearby' : 'default';
         const iconKey = `${level}-${state}`;
@@ -204,7 +223,25 @@ export function CarparkMap({
             eventHandlers={{
               click: () => onMarkerSelect(carpark),
             }}
-          />
+          >
+            <Popup>
+              <div style={{ minWidth: 180 }}>
+                <strong>{carpark.id}</strong>
+                <br />
+                {occupancy?.availableLots !== null && occupancy?.totalLots !== null ? (
+                  <>
+                    {occupancy.availableLots}/{occupancy.totalLots} lots available
+                    <br />
+                    {occupancy.occupancyRatio !== null
+                      ? `Vacancy ${(occupancy.occupancyRatio * 100).toFixed(0)}%`
+                      : 'Vacancy unknown'}
+                  </>
+                ) : (
+                  'Live availability unavailable'
+                )}
+              </div>
+            </Popup>
+          </Marker>
         );
       })}
     </MapContainer>
