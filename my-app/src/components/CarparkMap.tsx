@@ -1,6 +1,6 @@
 import { useMemo, type MutableRefObject } from 'react';
 import { MapContainer, TileLayer, Marker, ZoomControl, useMap, Circle, Popup } from 'react-leaflet';
-import { Fab } from '@mui/material';
+import { Box, Typography, Fab } from '@mui/material';
 import { MyLocation as MyLocationIcon } from '@mui/icons-material';
 import L from 'leaflet';
 
@@ -42,9 +42,9 @@ type CongestionLevel = typeof CONGESTION_LEVELS[number];
 type MarkerState = typeof MARKER_STATES[number];
 
 const LEVEL_COLORS: Record<CongestionLevel, string> = {
-  low: '#ffcdd2',
-  medium: '#ef9a9a',
-  high: '#b71c1c',
+  low: '#b9f6ca', // very light green – many lots available
+  medium: '#66bb6a', // medium green – moderate availability
+  high: '#1b5e20', // deep green – crowded
   unknown: '#78909c',
 };
 
@@ -168,16 +168,27 @@ export function CarparkMap({
     return iconMap;
   }, []);
 
+  const legendItems = useMemo(
+    () => [
+      { label: '≥ 60% lots free', color: LEVEL_COLORS.low },
+      { label: '30%–59% lots free', color: LEVEL_COLORS.medium },
+      { label: '< 30% lots free', color: LEVEL_COLORS.high },
+      { label: 'No live data', color: LEVEL_COLORS.unknown },
+    ],
+    [],
+  );
+
   return (
-    <MapContainer
-      center={center}
-      zoom={15}
-      style={{ height: '100%', width: '100%' }}
-      zoomControl={false}
-      ref={mapRef}
-    >
-      <ZoomControl position="topright" />
-      <LocationButton onLocated={onLocated} />
+    <Box sx={{ position: 'relative', height: '100%', width: '100%' }}>
+      <MapContainer
+        center={center}
+        zoom={15}
+        style={{ height: '100%', width: '100%' }}
+        zoomControl={false}
+        ref={mapRef}
+      >
+        <ZoomControl position="topright" />
+        <LocationButton onLocated={onLocated} />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -244,6 +255,55 @@ export function CarparkMap({
           </Marker>
         );
       })}
-    </MapContainer>
+      </MapContainer>
+
+      <Box
+        sx={{
+          position: 'absolute',
+          right: 12,
+          bottom: 12,
+          bgcolor: 'rgba(255, 255, 255, 0.92)',
+          borderRadius: 1.5,
+          boxShadow: 3,
+          p: 1.5,
+          minWidth: 190,
+          color: '#37474f',
+          pointerEvents: 'auto',
+          zIndex: 1200,
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+          Marker colours
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Coloured “P” markers indicate free-lot ratio
+        </Typography>
+        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          {legendItems.map((item) => (
+            <Box key={item.label} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box
+                sx={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  bgcolor: item.color,
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 4px rgba(0,0,0,0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.65rem',
+                  color: '#ffffff',
+                }}
+              >
+                P
+              </Box>
+              <Typography variant="caption">{item.label}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </Box>
   );
 }
