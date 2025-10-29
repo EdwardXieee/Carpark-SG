@@ -27,6 +27,7 @@ import SearchBox from './components/SearchBox';
 import { CarparkMap } from './components/CarparkMap';
 import { CarparkSidebar } from './components/CarparkSidebar';
 import { LoginDialog } from './components/LoginDialog';
+import { FavoritesDrawer } from './components/FavoritesDrawer';
 import './App.css';
 
 import { useCarparkAvailability } from './hooks/useCarparkAvailability';
@@ -99,7 +100,7 @@ function App() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
-  const [favoritesMenuAnchor, setFavoritesMenuAnchor] = useState<null | HTMLElement>(null);
+  const [favoritesDrawerOpen, setFavoritesDrawerOpen] = useState(false);
 
   const [selectedLocation, setSelectedLocation] = useState<Anchor>(null);
   const [currentLocation, setCurrentLocation] = useState<Anchor>(null);
@@ -108,6 +109,7 @@ function App() {
   const [startTime, setStartTime] = useState(() => new Date());
   const [endTime, setEndTime] = useState(() => new Date(new Date().getTime() + 60 * 60 * 1000));
   const [vehicleType, setVehicleType] = useState('C');
+  const searchRadiusKm = 1;
 
   useEffect(() => {
     setSelectedLocation({ lat: mapCenter[0], lon: mapCenter[1] });
@@ -122,6 +124,7 @@ function App() {
     startTime,
     endTime,
     vehicleType,
+    searchRadiusKm,
   );
 
   const {
@@ -445,7 +448,7 @@ function App() {
     });
     setFavoriteIds([]);
     setProfileMenuAnchor(null);
-    setFavoritesMenuAnchor(null);
+    setFavoritesDrawerOpen(false);
   };
 
   const handleToggleFavorite = (carparkId: string) => {
@@ -480,21 +483,29 @@ function App() {
       setLoginDialogOpen(true);
       return;
     }
-    setFavoritesMenuAnchor(event.currentTarget);
+    event.currentTarget.blur();
+    setFavoritesDrawerOpen(true);
   };
 
   const closeFavoritesMenu = () => {
-    setFavoritesMenuAnchor(null);
+    setFavoritesDrawerOpen(false);
   };
+
+  const favoritesSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const hasFavorites = favoriteCarparkDetails.length > 0;
 
   const handleFavoriteSelect = (carpark: NearbyCarpark) => {
-    closeFavoritesMenu();
     setFocusedCarparkId(carpark.id);
     panTo(carpark.latitude, carpark.longitude, 17);
+    setFavoritesDrawerOpen(false);
   };
 
-  const hasFavorites = favoriteCarparkDetails.length > 0;
-  const favoritesSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const handleRemoveFavorite = (carparkId: string) => {
+    if (!favoritesSet.has(carparkId)) {
+      return;
+    }
+    handleToggleFavorite(carparkId);
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -566,56 +577,6 @@ function App() {
                 Sign in
               </Button>
             )}
-            <Menu
-              anchorEl={favoritesMenuAnchor}
-              open={Boolean(favoritesMenuAnchor)}
-              onClose={closeFavoritesMenu}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            >
-              {!authState.isAuthenticated ? (
-                <MenuItem disabled>
-                  <ListItemIcon>
-                    <FavoriteBorderIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="Sign in to manage bookmarks" />
-                </MenuItem>
-              ) : favoriteCarparkDetails.length === 0 ? (
-                <MenuItem disabled>
-                  <ListItemIcon>
-                    <FavoriteBorderIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="No bookmarked car parks yet" />
-                </MenuItem>
-              ) : (
-                favoriteCarparkDetails.map((item) => (
-                  <MenuItem
-                    key={item.id}
-                    onClick={() => handleFavoriteSelect(item)}
-                  >
-                    <ListItemIcon>
-                      <FavoriteIcon fontSize="small" color="error" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.id}
-                      secondary={(() => {
-                        const available = item.availableLots ?? null;
-                        const total = item.totalLots ?? null;
-                        const ratio = item.occupancyRatio ?? computeOccupancyRatio(available, total);
-                        if (available !== null && total !== null) {
-                          const suffix = ratio !== null ? ` • Vacancy ${(ratio * 100).toFixed(0)}%` : '';
-                          return `${available}/${total} lots${suffix}`;
-                        }
-                        if (available !== null) {
-                          return `${available} lots`;
-                        }
-                        return 'No live data';
-                      })()}
-                    />
-                  </MenuItem>
-                ))
-              )}
-            </Menu>
           </Toolbar>
         </AppBar>
 
@@ -663,6 +624,7 @@ function App() {
               onMarkerSelect={(carpark) => handleMarkerSelect(carpark.id, carpark.latitude, carpark.longitude)}
               onLocated={handleLocate}
               mapRef={mapRef}
+              searchRadiusKm={searchRadiusKm}
             />
           </Box>
 
@@ -688,6 +650,14 @@ function App() {
           open={loginDialogOpen}
           onClose={() => setLoginDialogOpen(false)}
           onSuccess={handleLoginSuccess}
+        />
+        <FavoritesDrawer
+          open={favoritesDrawerOpen}
+          onClose={closeFavoritesMenu}
+          favorites={favoriteCarparkDetails}
+          onNavigate={handleFavoriteSelect}
+          onRemove={handleRemoveFavorite}
+          anchor={anchor}
         />
       </Box>
     </ThemeProvider>

@@ -21,9 +21,7 @@ body, html {
   width: 100%;
 }
 
-.leaflet-marker-icon {
-  filter: hue-rotate(120deg);
-}
+/* Custom marker icons include their own colouring */
 
 /* App bar styling */
 .app-header {
