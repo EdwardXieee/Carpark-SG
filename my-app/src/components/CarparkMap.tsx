@@ -262,7 +262,7 @@ export function CarparkMap({
           position: 'absolute',
           right: 12,
           bottom: 12,
-          bgcolor: 'rgba(255, 255, 255, 0.92)',
+          bgcolor: 'rgba(255, 255, 255, 0.9)',
           borderRadius: 1.5,
           boxShadow: 3,
           p: 1.5,

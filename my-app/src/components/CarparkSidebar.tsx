@@ -199,6 +199,7 @@ export function CarparkSidebar({
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Parking Information</Typography>
           <Divider sx={{ mb: 1 }} />
           <List dense>
+            <DetailItem label="Address" value={focusedCarpark.address ?? 'N/A'} />
             <DetailItem label="Agency" value={focusedCarpark.agency ?? 'N/A'} />
             <DetailItem label="Parking System" value={focusedCarpark.parkingSystemType ?? 'N/A'} />
             <DetailItem label="Short-term Parking" value={focusedCarpark.shortTermParkingPeriod ?? 'N/A'} />
@@ -247,9 +248,6 @@ export function CarparkSidebar({
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#2e7d32' }} title={lot.address}>
                       {lot.id}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {lot.address}
                     </Typography>
                   </Box>
                   {renderFavoriteButton(lot.id)}
