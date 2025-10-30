@@ -20,16 +20,20 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20' # 推荐使用一个 LTS (长期支持) 版本
-          cache: 'npm' # 为 npm 添加缓存，加快构建速度
+          cache: 'npm'
+          cache-dependency-path: my-app/package-lock.json # 为 npm 添加缓存，加快构建速度
 
       - name: Install Dependencies
         run: npm install
+        working-directory: my-app
 
       - name: Build Vite Project
         run: npm run build
+        working-directory: my-app
 
       - name: Archive dist folder
-        run: tar -czvf my-app/dist.tar.gz -C my-app dist
+        run: tar -czvf dist.tar.gz dist
+        working-directory: my-app
 
       # 您需要确保您的 Dockerfile 已准备好处理 ./dist 目录
       - name: Build Docker Image
