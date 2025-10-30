@@ -1,0 +1,65 @@
+name: CI/CD Pipeline (Vite + React)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_TAG: ${{ secrets.DOCKER_USERNAME }}/my-react-app:latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3 # 建议升级到 v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20' # 推荐使用一个 LTS (长期支持) 版本
+          cache: 'npm' # 为 npm 添加缓存，加快构建速度
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Vite Project
+        run: npm run build
+
+      - name: Archive dist folder
+        run: tar -czvf my-app/dist.tar.gz -C my-app dist
+
+      # 您需要确保您的 Dockerfile 已准备好处理 ./dist 目录
+      - name: Build Docker Image
+        run: |
+          docker build -t $IMAGE_TAG -f my-app/dockerfile my-app
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker Image
+        run: |
+          docker push $IMAGE_TAG
+
+      # - name: Trigger Deployment via HTTP Endpoint
+      #   run: |
+      #     curl -X POST http://${{ secrets.SERVER_HOST }}/deploy \
+      #       -H "Authorization: Bearer ${{ secrets.DEPLOY_SECRET_TOKEN }}" \
+      #       -d "imageTag=$IMAGE_TAG"
+
+      - name: Trigger Deployment via HTTP Endpoint
+        run: |
+          JSON_PAYLOAD=$(printf '{"args":["frontend"],"env":["IMAGE_TAG=%s"]}' "$IMAGE_TAG")
+
+          echo "Sending payload: $JSON_PAYLOAD"
+
+          # 发送请求
+          curl -X POST http://${{ secrets.SERVER_HOST }}/deploy \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_SECRET_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"
