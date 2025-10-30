@@ -26,8 +26,5 @@ FROM nginx:alpine
 # 从 "builder" 阶段复制构建好的静态文件 (dist) 到 Nginx 的默认网站目录
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 暴露容器的 80 端口
-EXPOSE 80
-
 # 启动 Nginx
 CMD ["nginx", "-g", "daemon off;"]
