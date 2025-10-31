@@ -58,7 +58,7 @@ jobs:
 
       - name: Trigger Deployment via HTTP Endpoint
         run: |
-          JSON_PAYLOAD=$(printf '{"args":["frontend"],"env":["IMAGE_TAG=%s"]}' "$IMAGE_TAG")
+          JSON_PAYLOAD=$(printf '{"args":["frontend", "%s"]' "$IMAGE_TAG")
 
           echo "Sending payload: $JSON_PAYLOAD"
 
