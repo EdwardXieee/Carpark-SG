@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { CarparkLocation, NearbyCarpark } from '../types/carpark';
 import { getDistanceInKm } from '../utils/geo';
+import { md5 } from '../utils/md5';
 
 type Anchor = { lat: number; lon: number } | null;
 
@@ -79,11 +80,19 @@ export const useNearbyCarparks = (
           lotType,
         };
 
+        const requestBody_key = {
+          parkingStartTime: formatDate(startTime),
+          parkingEndTime: formatDate(endTime),
+          carParkIds,
+          lotType,
+          key: md5(JSON.stringify(carParkIds)),
+        };
+
         const [lotsResponse, ratesResponse] = await Promise.all([
           fetch('/api/car-park/query/lots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
+            body: JSON.stringify(requestBody_key),
             signal: controller.signal,
           }),
           fetch('/api/car-park/query/parking-rate', {

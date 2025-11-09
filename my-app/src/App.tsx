@@ -37,6 +37,7 @@ import type { CarparkOccupancy, NearbyCarpark } from './types/carpark';
 import { TimeSelection } from './components/TimeSelection';
 import { getDistanceInKm } from './utils/geo';
 import VehicleTypeSelection from './components/VehicleTypeSelection';
+import { md5 } from './utils/md5';
 
 const theme = createTheme({
   palette: {
@@ -213,11 +214,19 @@ function App() {
           lotType: vehicleType,
         };
 
+        const requestBody_key = {
+          parkingStartTime: formatDate(startTime),
+          parkingEndTime: formatDate(endTime),
+          carParkIds: [focusedCarparkId],
+          lotType: vehicleType,
+          key: md5(JSON.stringify(focusedCarparkId))
+        };
+
         const [lotsResponse, ratesResponse, infoResponse] = await Promise.all([
           fetch('/api/car-park/query/lots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestBody),
+            body: JSON.stringify(requestBody_key),
             signal: controller.signal,
           }),
           fetch('/api/car-park/query/parking-rate', {

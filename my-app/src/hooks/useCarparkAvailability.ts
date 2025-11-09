@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { CarparkOccupancy } from '../types/carpark';
+import { md5 } from '../utils/md5';
 
 type CarparkAvailabilityLot = {
   total: number;
@@ -33,7 +34,6 @@ type UseCarparkAvailabilityResult = {
   refetch: () => Promise<void>;
 };
 
-const MAX_IDS_PER_REQUEST = 100;
 const LOT_AVAILABILITY_PATH = '/api/car-park/query/lots';
 const UNKNOWN_OCCUPANCY: CarparkOccupancy = {
   availableLots: null,
@@ -59,18 +59,6 @@ const resolveEndpoint = (customEndpoint?: string) => {
 
   const normalized = envBaseUrl.endsWith('/') ? envBaseUrl.slice(0, -1) : envBaseUrl;
   return `${normalized}${LOT_AVAILABILITY_PATH}`;
-};
-
-const splitIntoChunks = <T,>(items: T[], chunkSize: number) => {
-  if (items.length <= chunkSize) {
-    return [items];
-  }
-
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += chunkSize) {
-    chunks.push(items.slice(i, i + chunkSize));
-  }
-  return chunks;
 };
 
 const pickLot = (lots: CarparkAvailabilityLot[], targetType?: string) => {
@@ -148,33 +136,31 @@ export const useCarparkAvailability = (
 
       try {
         const nextAvailability: Record<string, CarparkOccupancy> = {};
-        const idChunks = splitIntoChunks(dedupedIds, MAX_IDS_PER_REQUEST);
 
-        for (const ids of idChunks) {
-          const response = await fetch(resolvedEndpoint, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              accept: '*/*',
-            },
-            body: JSON.stringify({
-              parkingStartTime,
-              parkingEndTime,
-              carParkIds: ids,
-              lotType: lotType ?? '',
-            }),
-            signal,
-          });
+        const response = await fetch(resolvedEndpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            accept: '*/*',
+          },
+          body: JSON.stringify({
+            parkingStartTime,
+            parkingEndTime,
+            carParkIds: [],
+            lotType: lotType ?? '',
+            key: md5(''),
+          }),
+          signal,
+        });
 
-          if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
-          }
-
-          const payload = (await response.json()) as CarparkAvailabilityResponse;
-          payload.data.forEach(({ id, lots }) => {
-            nextAvailability[id] = toOccupancy(pickLot(lots, lotType));
-          });
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
         }
+
+        const payload = (await response.json()) as CarparkAvailabilityResponse;
+        payload.data.forEach(({ id, lots }) => {
+          nextAvailability[id] = toOccupancy(pickLot(lots, lotType));
+        });
 
         dedupedIds.forEach((id) => {
           if (!nextAvailability[id]) {
