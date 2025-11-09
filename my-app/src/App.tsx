@@ -203,7 +203,7 @@ function App() {
     }
 
     const controller = new AbortController();
-
+    const SALT = 'CS5224TeamX$$';
     const fetchDetails = async () => {
       setFocusedCarpark(null);
       try {
@@ -219,7 +219,7 @@ function App() {
           parkingEndTime: formatDate(endTime),
           carParkIds: [focusedCarparkId],
           lotType: vehicleType,
-          key: md5(JSON.stringify(focusedCarparkId))
+          key: md5(SALT + JSON.stringify(focusedCarparkId))
         };
 
         const [lotsResponse, ratesResponse, infoResponse] = await Promise.all([

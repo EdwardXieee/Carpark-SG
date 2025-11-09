@@ -136,7 +136,7 @@ export const useCarparkAvailability = (
 
       try {
         const nextAvailability: Record<string, CarparkOccupancy> = {};
-
+        const SALT = 'CS5224TeamX$$';
         const response = await fetch(resolvedEndpoint, {
           method: 'POST',
           headers: {
@@ -148,7 +148,7 @@ export const useCarparkAvailability = (
             parkingEndTime,
             carParkIds: [],
             lotType: lotType ?? '',
-            key: md5(''),
+            key: md5(SALT + JSON.stringify('')),
           }),
           signal,
         });

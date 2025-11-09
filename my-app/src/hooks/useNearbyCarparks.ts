@@ -73,6 +73,7 @@ export const useNearbyCarparks = (
         }
 
         const carParkIds = nearbyCarparkLocations.map((c) => c.id);
+        const SALT = 'CS5224TeamX$$';
         const requestBody = {
           parkingStartTime: formatDate(startTime),
           parkingEndTime: formatDate(endTime),
@@ -85,7 +86,7 @@ export const useNearbyCarparks = (
           parkingEndTime: formatDate(endTime),
           carParkIds,
           lotType,
-          key: md5(JSON.stringify(carParkIds)),
+          key: md5(SALT + JSON.stringify(carParkIds)),
         };
 
         const [lotsResponse, ratesResponse] = await Promise.all([
