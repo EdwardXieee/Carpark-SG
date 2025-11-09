@@ -1,3 +1,4 @@
+// @ts-nocheck
 /*
  * [js-md5]{@link https://github.com/emn178/js-md5}
  *
