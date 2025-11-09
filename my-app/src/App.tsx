@@ -643,6 +643,7 @@ function App() {
             favorites={favoritesSet}
             onToggleFavorite={handleToggleFavorite}
             canFavorite={authState.isAuthenticated}
+            availabilityMap={availabilityMap}
           />
         </Box>
 

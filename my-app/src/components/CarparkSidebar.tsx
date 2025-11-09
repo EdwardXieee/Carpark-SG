@@ -42,6 +42,7 @@ type CarparkSidebarProps = {
   favorites: Set<string>;
   onToggleFavorite: (carparkId: string) => void;
   canFavorite: boolean;
+  availabilityMap: Record<string, { availableLots: number | null; totalLots: number | null; occupancyRatio: number | null }>;
 };
 
 const DetailItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -85,6 +86,7 @@ export function CarparkSidebar({
   favorites,
   onToggleFavorite,
   canFavorite,
+  availabilityMap,
 }: CarparkSidebarProps) {
   const buildDirectionsUrl = (lat: number, lon: number) => {
     const searchParams = new URLSearchParams({ api: '1', destination: `${lat},${lon}` });
@@ -95,6 +97,19 @@ export function CarparkSidebar({
   };
 
   const durationHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+
+  const resolveAvailability = (carpark: NearbyCarpark) => {
+    const fallback = availabilityMap[carpark.id];
+    const availableLots = carpark.availableLots ?? fallback?.availableLots ?? null;
+    const totalLots = carpark.totalLots ?? fallback?.totalLots ?? null;
+    const occupancyRatio = carpark.occupancyRatio ?? fallback?.occupancyRatio ?? null;
+    return {
+      availableLots,
+      totalLots,
+      occupancyRatio,
+      color: getAvailabilityColor(availableLots, totalLots),
+    };
+  };
 
   const renderFavoriteButton = (carparkId: string, size: 'small' | 'medium' = 'small') => {
     const isFavorited = favorites.has(carparkId);
@@ -130,6 +145,7 @@ export function CarparkSidebar({
     }
 
     const walkingMinutes = getWalkingMinutes(focusedCarpark.distanceKm);
+    const { availableLots, totalLots, color, occupancyRatio } = resolveAvailability(focusedCarpark);
 
     return (
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -141,9 +157,9 @@ export function CarparkSidebar({
             <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 'medium' }}>
               <Box
                 component="span"
-                sx={{ color: getAvailabilityColor(focusedCarpark.availableLots, focusedCarpark.totalLots), fontWeight: 'bold' }}
+                sx={{ color, fontWeight: 'bold' }}
               >
-                {focusedCarpark.availableLots ?? '-'} / {focusedCarpark.totalLots ?? '-'}
+                {availableLots ?? '-'} / {totalLots ?? '-'}
               </Box>
             </Typography>
           </Box>
@@ -196,13 +212,14 @@ export function CarparkSidebar({
             Go Here
           </Button>
 
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Parking Information</Typography>
-          <Divider sx={{ mb: 1 }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Parking Information</Typography>
+            <Divider sx={{ mb: 1 }} />
           <List dense>
             <DetailItem label="Agency" value={focusedCarpark.agency ?? 'N/A'} />
             <DetailItem label="Parking System" value={focusedCarpark.parkingSystemType ?? 'N/A'} />
             <DetailItem label="Short-term Parking" value={focusedCarpark.shortTermParkingPeriod ?? 'N/A'} />
             <DetailItem label="Free Parking" value={focusedCarpark.freeParkingPeriod ?? 'N/A'} />
+            <DetailItem label="Vacancy Ratio" value={occupancyRatio !== null ? `${(occupancyRatio * 100).toFixed(0)}%` : 'N/A'} />
             <DetailItem label="Night Parking" value={focusedCarpark.nightParkingFlag ? 'Yes' : 'No'} />
             <DetailItem label="Basement Parking" value={focusedCarpark.basementFlag ? 'Yes' : 'No'} />
             <DetailItem label="Decks" value={focusedCarpark.deckCount ?? 'N/A'} />
@@ -238,6 +255,7 @@ export function CarparkSidebar({
 
     return nearbyCarparks.map((lot) => {
       const walkingMinutes = getWalkingMinutes(lot.distanceKm);
+      const { availableLots, totalLots, occupancyRatio, color } = resolveAvailability(lot);
       return (
         <ListItem key={lot.id} disablePadding sx={{ mb: 1 }}>
           <ListItemButton onClick={() => onSelectCarpark(lot)} sx={{ p: 0 }}>
@@ -265,12 +283,15 @@ export function CarparkSidebar({
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <DirectionsCarIcon sx={{ color: getAvailabilityColor(lot.availableLots, lot.totalLots) }} />
-                  <Typography variant="subtitle1" sx={{ color: getAvailabilityColor(lot.availableLots, lot.totalLots), fontWeight: 'bold' }}>
-                    {lot.availableLots ?? '-'}
+                  <DirectionsCarIcon sx={{ color }} />
+                  <Typography variant="subtitle1" sx={{ color, fontWeight: 'bold' }}>
+                    {availableLots ?? '-'}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">/ {lot.totalLots ?? '-'}</Typography>
+                  <Typography variant="body2" color="text.secondary">/ {totalLots ?? '-'}</Typography>
                 </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {occupancyRatio !== null ? `Vacancy ${(occupancyRatio * 100).toFixed(0)}%` : 'Vacancy N/A'}
+                </Typography>
               </CardContent>
             </Card>
           </ListItemButton>
