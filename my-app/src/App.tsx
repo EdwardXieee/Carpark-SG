@@ -90,7 +90,7 @@ type AuthState = {
 
 function App() {
   const [sortBy, setSortBy] = useState<SortBy>('distance');
-  const [mapCenter, setMapCenter] = useState<[number, number]>([1.2949927, 103.7733938]);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([1.319042, 103.765362]);
   const mapRef = useRef<LeafletMap | null>(null);
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
