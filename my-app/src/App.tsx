@@ -92,11 +92,30 @@ function App() {
   const [sortBy, setSortBy] = useState<SortBy>('distance');
   const [mapCenter, setMapCenter] = useState<[number, number]>([1.319042, 103.765362]);
   const mapRef = useRef<LeafletMap | null>(null);
-  const [authState, setAuthState] = useState<AuthState>({
-    isAuthenticated: false,
-    email: null,
-    appToken: null,
-    googleToken: null,
+  const [authState, setAuthState] = useState<AuthState>(() => {
+    const storedAuth = localStorage.getItem('authState');
+    if (storedAuth) {
+      try {
+        const parsedAuth: AuthState = JSON.parse(storedAuth);
+        if (
+          parsedAuth.isAuthenticated &&
+          parsedAuth.email &&
+          parsedAuth.appToken &&
+          parsedAuth.googleToken
+        ) {
+          return parsedAuth;
+        }
+      } catch (error) {
+        console.warn('Failed to parse stored auth state', error);
+        localStorage.removeItem('authState');
+      }
+    }
+    return {
+      isAuthenticated: false,
+      email: null,
+      appToken: null,
+      googleToken: null,
+    };
   });
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -438,13 +457,14 @@ function App() {
   };
 
   const handleLoginSuccess = (params: { email: string; appToken: string; googleToken: string }) => {
-    setAuthState({
+    const newAuthState = {
       isAuthenticated: true,
       email: params.email,
       appToken: params.appToken,
       googleToken: params.googleToken,
-    });
-
+    };
+    setAuthState(newAuthState);
+    localStorage.setItem('authState', JSON.stringify(newAuthState));
     localStorage.setItem('auth:lastEmail', params.email);
   };
 
@@ -455,6 +475,8 @@ function App() {
       appToken: null,
       googleToken: null,
     });
+    localStorage.removeItem('authState');
+    localStorage.removeItem('auth:lastEmail');
     setFavoriteIds([]);
     setProfileMenuAnchor(null);
     setFavoritesDrawerOpen(false);

@@ -172,6 +172,11 @@ export function CarparkSidebar({
                   : 'N/A'
                 }
               </Typography>
+              {focusedCarpark.estimatedFee !== null && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                  Fee is an estimate and may vary.
+                </Typography>
+              )}
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Distance</Typography>
