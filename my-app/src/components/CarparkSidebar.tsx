@@ -159,7 +159,7 @@ export function CarparkSidebar({
           <Box sx={{ mb: 2 }}>
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="caption" color="text.secondary">Estimated Fee</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'black' }}>
                 {focusedCarpark.estimatedFee !== null
                   ? (
                     <>
@@ -180,7 +180,7 @@ export function CarparkSidebar({
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Distance</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'black' }}>
                 {`${Math.round(focusedCarpark.distanceKm * 1000)} m `}
                 <Typography component="span" variant="body2" color="text.secondary">
                   {`(${walkingMinutes} min walk)`}
