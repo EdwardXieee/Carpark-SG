@@ -346,7 +346,7 @@ function App() {
   }, [favoriteIds, carparks, availabilityMap, anchor, mapCenter]);
 
   const sortedNearbyCarparks = useMemo(() => {
-    const sorted = [...decoratedNearbyCarparks];
+    const sorted = decoratedNearbyCarparks.filter((p) => p.availableLots !== null);
     if (sortBy === 'price') {
       return sorted.sort((a, b) => (a.estimatedFee ?? Infinity) - (b.estimatedFee ?? Infinity));
     }
