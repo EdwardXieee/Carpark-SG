@@ -4,7 +4,7 @@ import { Search as SearchIcon, LocationOn as LocationOnIcon } from '@mui/icons-m
 import debounce from 'lodash.debounce';
 
 interface SearchResult {
-  display_name: string;
+  address: string;
   lat: number;
   lon: number;
 }
@@ -20,7 +20,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  // Define search function that queries Nominatim
+  // Define search function that queries OneMap API
   const fetchResults = async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
@@ -29,13 +29,13 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
     setIsSearching(true);
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=sg`
+        `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(query)}&returnGeom=Y&getAddrDetails=Y`
       );
       const data = await response.json();
-      const results = (data || []).map((d: any) => ({
-        display_name: d.display_name,
-        lat: parseFloat(d.lat),
-        lon: parseFloat(d.lon),
+      const results = (data.results || []).map((d: any) => ({
+        address: d.ADDRESS,
+        lat: parseFloat(d.LATITUDE),
+        lon: parseFloat(d.LONGITUDE),
       }));
       setSearchResults(results);
     } finally {
@@ -137,7 +137,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
                   onClick={() => {
                     onSelectResult(result);
                     setSearchResults([]);
-                    setInputValue(result.display_name.split(',')[0]);
+                    setInputValue(result.address);
                   }}
                   sx={{ '&:hover': { bgcolor: '#e8f5e9' } }}
                 >
@@ -145,8 +145,7 @@ export default function SearchBox({ onSelectResult, onSearchClick, middleContent
                     <LocationOnIcon color="primary" />
                   </ListItemIcon>
                   <ListItemText
-                    primary={result.display_name.split(',')[0]}
-                    secondary={result.display_name.split(',').slice(1, 3).join(',')}
+                    primary={result.address}
                     primaryTypographyProps={{
                       color: '#2e7d32',
                       fontWeight: 'medium',

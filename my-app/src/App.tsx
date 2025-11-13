@@ -412,12 +412,12 @@ function App() {
     } else {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=sg`
+          `https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${encodeURIComponent(query)}&returnGeom=Y&getAddrDetails=Y`
         );
         const data = await response.json();
-        if (data && data.length > 0) {
-          const result = data[0];
-          handleSearchSelect({ lat: parseFloat(result.lat), lon: parseFloat(result.lon) });
+        if (data && data.results.length > 0) {
+          const result = data.results[0];
+          handleSearchSelect({ lat: parseFloat(result.LATITUDE), lon: parseFloat(result.LONGITUDE) });
         }
       } catch (error) {
         console.error('Geocoding error:', error);
