@@ -79,7 +79,6 @@ export function CarparkSidebar({
   focusedCarparkId,
   onSelectCarpark,
   onCloseDetails,
-  anchor,
   currentLocation,
   isLoading,
   startTime,
