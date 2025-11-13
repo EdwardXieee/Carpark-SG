@@ -36,6 +36,7 @@ type CarparkSidebarProps = {
   onSelectCarpark: (carpark: NearbyCarpark) => void;
   onCloseDetails: () => void;
   anchor: { lat: number; lon: number } | null;
+  currentLocation: { lat: number; lon: number } | null;
   isLoading: boolean;
   startTime: Date;
   endTime: Date;
@@ -79,6 +80,7 @@ export function CarparkSidebar({
   onSelectCarpark,
   onCloseDetails,
   anchor,
+  currentLocation,
   isLoading,
   startTime,
   endTime,
@@ -88,8 +90,8 @@ export function CarparkSidebar({
 }: CarparkSidebarProps) {
   const buildDirectionsUrl = (lat: number, lon: number) => {
     const searchParams = new URLSearchParams({ api: '1', destination: `${lat},${lon}` });
-    if (anchor) {
-      searchParams.set('origin', `${anchor.lat},${anchor.lon}`);
+    if (currentLocation) {
+      searchParams.set('origin', `${currentLocation.lat},${currentLocation.lon}`);
     }
     return `https://www.google.com/maps/dir/?${searchParams.toString()}`;
   };

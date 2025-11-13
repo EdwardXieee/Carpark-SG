@@ -668,6 +668,7 @@ function App() {
             onSelectCarpark={handleListItemSelect}
             onCloseDetails={handleCloseDetails}
             anchor={anchor}
+            currentLocation={currentLocation}
             isLoading={nearbyLoading}
             startTime={startTime}
             endTime={endTime}
